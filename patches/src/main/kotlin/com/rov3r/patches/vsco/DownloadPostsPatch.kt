@@ -31,7 +31,7 @@ private val downloadIconResourcePatch = resourcePatch {
 @Suppress("unused")
 val downloadPostsPatch = bytecodePatch(
     name = "Download posts",
-    description = "Adds a button that downloads VSCO images and DSCO videos at their original quality.",
+    description = "Adds a button that downloads VSCO images and DSCO videos at their original quality to a folder you choose.",
     default = true
 ) {
     compatibleWith(VSCO_COMPATIBILITY)

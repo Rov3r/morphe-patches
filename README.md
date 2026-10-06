@@ -15,7 +15,7 @@ bundle.
 
 ### VSCO
 
-- **Download posts** — Downloads images and DSCO videos at their original quality.
+- **Download posts** — Downloads images and DSCO videos at their original quality to a folder you choose. The folder is remembered; long-press the download button to change it.
 
 <!-- PATCHES_END -->
 

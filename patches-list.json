@@ -1,10 +1,10 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "patches": [
     {
       "name": "Download posts",
-      "description": "Adds a button that downloads VSCO images and DSCO videos at their original quality.",
+      "description": "Adds a button that downloads VSCO images and DSCO videos at their original quality to a folder you choose.",
       "default": true,
       "category": null,
       "dependencies": [
