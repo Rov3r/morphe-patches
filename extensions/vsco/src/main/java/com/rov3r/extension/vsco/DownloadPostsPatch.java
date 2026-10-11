@@ -862,6 +862,20 @@ public final class DownloadPostsPatch {
         return context.getResources().getIdentifier(name, type, context.getPackageName());
     }
 
+    private static Field findField(Class<?> type, String name) throws NoSuchFieldException {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                Field field = current.getDeclaredField(name);
+                field.setAccessible(true);
+                return field;
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(name);
+    }
+
     private static ViewGroup.LayoutParams copyLayoutParams(ViewGroup.LayoutParams original) {
         try {
             Constructor<?> exactCopy = original.getClass().getConstructor(original.getClass());
