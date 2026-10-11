@@ -57,6 +57,45 @@ private val downloadIconResourcePatch = resourcePatch {
             </vector>
             """.trimIndent()
         )
+
+        val globalMenu = get("res/layout/global_menu.xml", copy = false)
+        var globalMenuXml = globalMenu.readText()
+        if (!globalMenuXml.contains("@+id/morphe_patch_settings")) {
+            val settingsIdMarker = "android:id=\"@+id/settings\""
+            val settingsIdIndex = globalMenuXml.indexOf(settingsIdMarker)
+            val settingsStartIndex = globalMenuXml.lastIndexOf("<TextView", settingsIdIndex)
+            val patchSettingsEntry =
+                """
+                |            <TextView
+                |                android:id="@+id/morphe_patch_settings"
+                |                android:layout_width="wrap_content"
+                |                android:layout_height="wrap_content"
+                |                android:layout_marginTop="@dimen/ds_global_menu_top_margin"
+                |                android:text="Patch Settings"
+                |                android:layout_marginStart="@dimen/ds_dimen_med"
+                |                app:layout_constraintStart_toStartOf="parent"
+                |                app:layout_constraintTop_toBottomOf="@+id/global_menu_vsco_one_card"
+                |                style="@style/DsTextGlobalMenuSecondary"/>
+                """.trimMargin()
+            check(settingsIdIndex >= 0 && settingsStartIndex >= 0) {
+                "Could not find VSCO's Settings menu entry"
+            }
+            check(
+                globalMenuXml.contains(
+                    "app:layout_constraintTop_toBottomOf=\"@+id/global_menu_vsco_one_card\""
+                )
+            ) {
+                "Could not find VSCO's Settings menu constraint"
+            }
+            globalMenuXml = globalMenuXml.replaceFirst(
+                "app:layout_constraintTop_toBottomOf=\"@+id/global_menu_vsco_one_card\"",
+                "app:layout_constraintTop_toBottomOf=\"@+id/morphe_patch_settings\""
+            )
+            globalMenuXml = globalMenuXml.substring(0, settingsStartIndex) +
+                patchSettingsEntry + "\n" +
+                globalMenuXml.substring(settingsStartIndex)
+            globalMenu.writeText(globalMenuXml)
+        }
     }
 }
 
@@ -79,6 +118,11 @@ val downloadPostsPatch = bytecodePatch(
         SetupListenersFingerprint.method.addInstruction(
             0,
             "invoke-static { p0 }, $EXTENSION_CLASS->attachDownloadButton(Landroid/view/View;)V"
+        )
+
+        ShowImageMenuFingerprint.method.addInstruction(
+            0,
+            "invoke-static { p0, p1 }, $EXTENSION_CLASS->attachOverflowActions(Landroid/view/View;Ljava/lang/Object;)V"
         )
 
         LithiumActivityOnCreateFingerprint.method.addInstruction(

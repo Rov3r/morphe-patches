@@ -2,6 +2,7 @@ package com.rov3r.extension.vsco;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Dialog;
 import android.app.Fragment;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -20,10 +21,12 @@ import android.provider.DocumentsContract;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedInputStream;
@@ -33,12 +36,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Runtime code injected into VSCO by the Morphe patch. */
@@ -47,6 +54,10 @@ public final class DownloadPostsPatch {
     private static final String DOWNLOAD_BUTTON_TAG = "rov3r_morphe_vsco_download_button";
     private static final String COPY_BUTTON_TAG = "rov3r_morphe_vsco_copy_button";
     private static final String SHARE_BUTTON_TAG = "rov3r_morphe_vsco_share_button";
+    private static final String FEED_DOWNLOAD_BUTTON_TAG =
+        "rov3r_morphe_vsco_feed_download_button";
+    private static final String OVERFLOW_COPY_TAG = "rov3r_morphe_vsco_overflow_copy";
+    private static final String OVERFLOW_SHARE_TAG = "rov3r_morphe_vsco_overflow_share";
     private static final String NETWORK_UTILITY = "co.vsco.vsn.utility.NetworkUtility";
     private static final String PICKER_TAG = "rov3r_morphe_vsco_directory_picker";
     private static final Set<String> TRACKING_PARAMETERS = new HashSet<>(Arrays.asList(
@@ -90,32 +101,7 @@ public final class DownloadPostsPatch {
         button.setTag(DOWNLOAD_BUTTON_TAG);
         button.setContentDescription("Download post. Long press to change save folder.");
 
-        int forwardId = resourceId(context, "id", "detail_view_forward_button");
-        View forwardButton = detailView.findViewById(forwardId);
-        if (forwardButton != null) {
-            button.setPadding(
-                forwardButton.getPaddingLeft(),
-                forwardButton.getPaddingTop(),
-                forwardButton.getPaddingRight(),
-                forwardButton.getPaddingBottom()
-            );
-        }
-
-        button.setOnClickListener(view -> {
-            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
-            Context viewContext = view.getContext();
-            Uri destination = savedDestination(viewContext);
-            if (destination == null) {
-                chooseDestination(viewContext, true);
-                return;
-            }
-            queueDownload(viewContext, destination);
-        });
-        button.setOnLongClickListener(view -> {
-            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-            chooseDestination(view.getContext(), false);
-            return true;
-        });
+        configureDownloadButton(button, null);
 
         ImageButton copyButton = createActionButton(
             context,
@@ -135,7 +121,11 @@ public final class DownloadPostsPatch {
         shareButton.setContentDescription("Share original media");
         shareButton.setOnClickListener(view -> shareOriginal(view.getContext()));
 
-        int insertAt = actionRow.indexOfChild(favoriteButton) + 1;
+        int forwardId = resourceId(context, "id", "detail_view_forward_button");
+        View forwardButton = detailView.findViewById(forwardId);
+        int insertAt = forwardButton == null
+            ? actionRow.indexOfChild(favoriteButton) + 1
+            : actionRow.indexOfChild(forwardButton) + 1;
         actionRow.addView(button, insertAt++);
         actionRow.addView(copyButton, insertAt++);
         actionRow.addView(shareButton, insertAt);
@@ -147,13 +137,37 @@ public final class DownloadPostsPatch {
         button.setImageResource(iconId);
         button.setBackgroundColor(Color.TRANSPARENT);
         button.setLayoutParams(copyLayoutParams(template.getLayoutParams()));
-        button.setPadding(
-            template.getPaddingLeft(),
-            template.getPaddingTop(),
-            template.getPaddingRight(),
-            template.getPaddingBottom()
-        );
+        button.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+        int size = Math.min(template.getLayoutParams().width, template.getLayoutParams().height);
+        int padding = size > 0 ? Math.max(dp(context, 4), (size - dp(context, 24)) / 2) : dp(context, 8);
+        button.setPadding(padding, padding, padding, padding);
         return button;
+    }
+
+    private static void configureDownloadButton(ImageButton button, View feedItem) {
+        button.setOnClickListener(view -> {
+            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+            if (feedItem != null) {
+                Object model = findBoundMediaModel(feedItem);
+                if (model == null) {
+                    showToast(view.getContext(), "Couldn't download - media unavailable");
+                    return;
+                }
+                setCurrentModel(model);
+            }
+            Context viewContext = view.getContext();
+            Uri destination = savedDestination(viewContext);
+            if (destination == null) {
+                chooseDestination(viewContext, true);
+                return;
+            }
+            queueDownload(viewContext, destination);
+        });
+        button.setOnLongClickListener(view -> {
+            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            chooseDestination(view.getContext(), false);
+            return true;
+        });
     }
 
     public static void applyButtonPreferences(View root) {
@@ -167,27 +181,311 @@ public final class DownloadPostsPatch {
         if (DOWNLOAD_BUTTON_TAG.equals(tag)) {
             root.setVisibility(toolsEnabled ? View.VISIBLE : View.GONE);
         } else if (COPY_BUTTON_TAG.equals(tag)) {
-            root.setVisibility(
-                toolsEnabled && PatchSettings.enabled(
-                    context,
-                    PatchSettings.COPY_LINK_BUTTON,
-                    true
-                ) ? View.VISIBLE : View.GONE
-            );
+            int slots = hiddenNativeActionSlots(context);
+            root.setVisibility(toolsEnabled
+                && slots > 0
+                && PatchSettings.enabled(context, PatchSettings.COPY_LINK_BUTTON, false)
+                ? View.VISIBLE : View.GONE);
         } else if (SHARE_BUTTON_TAG.equals(tag)) {
-            root.setVisibility(
-                toolsEnabled && PatchSettings.enabled(
-                    context,
-                    PatchSettings.SHARE_LINK_BUTTON,
-                    true
-                ) ? View.VISIBLE : View.GONE
-            );
+            int slots = hiddenNativeActionSlots(context);
+            if (PatchSettings.enabled(context, PatchSettings.COPY_LINK_BUTTON, false)) {
+                slots--;
+            }
+            root.setVisibility(toolsEnabled
+                && slots > 0
+                && PatchSettings.enabled(context, PatchSettings.SHARE_LINK_BUTTON, false)
+                ? View.VISIBLE : View.GONE);
+        } else if (FEED_DOWNLOAD_BUTTON_TAG.equals(tag)) {
+            root.setVisibility(toolsEnabled ? View.VISIBLE : View.GONE);
         }
         if (root instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) root;
             for (int i = 0; i < group.getChildCount(); i++) {
                 applyButtonPreferences(group.getChildAt(i));
             }
+        }
+    }
+
+    private static int hiddenNativeActionSlots(Context context) {
+        int slots = 0;
+        if (PatchSettings.enabled(context, PatchSettings.HIDE_ACTION_FAVORITE, false)) slots++;
+        if (PatchSettings.enabled(context, PatchSettings.HIDE_ACTION_REPOST, false)) slots++;
+        if (PatchSettings.enabled(context, PatchSettings.HIDE_ACTION_MESSAGE, false)) slots++;
+        return slots;
+    }
+
+    /** Adds one native-sized download action to image and video cards in scrolling feeds. */
+    public static void attachFeedButtons(View root) {
+        Context context = root.getContext();
+        int imageFavorite = resourceId(context, "id", "image_item_favorite_button");
+        int videoFavorite = resourceId(context, "id", "video_item_favorite_button");
+        attachFeedButtons(root, imageFavorite, videoFavorite);
+    }
+
+    private static void attachFeedButtons(View root, int imageFavorite, int videoFavorite) {
+        int id = root.getId();
+        if ((id == imageFavorite && imageFavorite != 0)
+            || (id == videoFavorite && videoFavorite != 0)) {
+            attachFeedButton(root, id == imageFavorite ? "image_item" : "video_item");
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                attachFeedButtons(group.getChildAt(i), imageFavorite, videoFavorite);
+            }
+        }
+    }
+
+    private static void attachFeedButton(View favoriteButton, String prefix) {
+        if (!(favoriteButton.getParent() instanceof ViewGroup)) {
+            return;
+        }
+        ViewGroup card = (ViewGroup) favoriteButton.getParent();
+        if (card.findViewWithTag(FEED_DOWNLOAD_BUTTON_TAG) != null) {
+            return;
+        }
+        int iconId = resourceId(card.getContext(), "drawable", "morphe_vsco_download");
+        if (iconId == 0) {
+            return;
+        }
+
+        ImageButton button = createActionButton(card.getContext(), favoriteButton, iconId);
+        button.setId(View.generateViewId());
+        button.setTag(FEED_DOWNLOAD_BUTTON_TAG);
+        button.setContentDescription("Download post. Long press to change save folder.");
+        configureDownloadButton(button, favoriteButton);
+
+        ViewGroup.LayoutParams params = button.getLayoutParams();
+        clearHorizontalConstraints(params);
+        setIntField(params, "rightToLeft", favoriteButton.getId());
+        setIntField(params, "endToStart", favoriteButton.getId());
+        button.setLayoutParams(params);
+
+        int spacerId = resourceId(card.getContext(), "id", prefix + "_username_interactions_spacer");
+        View spacer = card.findViewById(spacerId);
+        if (spacer != null) {
+            ViewGroup.LayoutParams spacerParams = spacer.getLayoutParams();
+            setIntField(spacerParams, "rightToLeft", button.getId());
+            setIntField(spacerParams, "endToStart", button.getId());
+            spacer.setLayoutParams(spacerParams);
+        }
+        card.addView(button);
+        applyButtonPreferences(button);
+    }
+
+    private static void clearHorizontalConstraints(Object params) {
+        for (String name : new String[] {
+            "leftToLeft", "leftToRight", "rightToLeft", "rightToRight",
+            "startToStart", "startToEnd", "endToStart", "endToEnd"
+        }) {
+            setIntField(params, name, -1);
+        }
+    }
+
+    /** Called whenever the post's three-dot menu is opened. */
+    public static void attachOverflowActions(View detailView, Object menuState) {
+        if (menuState == null || !menuState.getClass().getSimpleName().contains("BottomMenuOpen")) {
+            return;
+        }
+        detailView.postDelayed(() -> {
+            try {
+                Field field = findField(detailView.getClass(), "bottomMenuDialogFragment");
+                Object fragment = field.get(detailView);
+                Object dialogObject = fragment.getClass().getMethod("getDialog").invoke(fragment);
+                if (!(dialogObject instanceof Dialog)) {
+                    return;
+                }
+                Dialog dialog = (Dialog) dialogObject;
+                if (dialog.getWindow() == null) {
+                    return;
+                }
+                View decor = dialog.getWindow().getDecorView();
+                View listView = decor.findViewById(
+                    resourceId(detailView.getContext(), "id", "bottom_menu_list")
+                );
+                if (!(listView instanceof LinearLayout)) {
+                    return;
+                }
+                LinearLayout list = (LinearLayout) listView;
+                addOverflowAction(
+                    list, dialog, OVERFLOW_COPY_TAG, "Copy direct media link", true
+                );
+                addOverflowAction(
+                    list, dialog, OVERFLOW_SHARE_TAG, "Share direct media link", false
+                );
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // A missing or closed menu must never interfere with VSCO's own options.
+            }
+        }, 150L);
+    }
+
+    private static void addOverflowAction(
+        LinearLayout list,
+        Dialog dialog,
+        String tag,
+        String title,
+        boolean copy
+    ) {
+        if (list.findViewWithTag(tag) != null) {
+            return;
+        }
+        TextView template = null;
+        int cancelId = resourceId(list.getContext(), "id", "bottom_menu_cancel");
+        View cancel = list.findViewById(cancelId);
+        if (cancel instanceof TextView) {
+            template = (TextView) cancel;
+        }
+        if (template == null) {
+            for (int i = list.getChildCount() - 1; i >= 0; i--) {
+                if (list.getChildAt(i) instanceof TextView) {
+                    template = (TextView) list.getChildAt(i);
+                    break;
+                }
+            }
+        }
+
+        TextView action = new TextView(list.getContext());
+        action.setTag(tag);
+        action.setText(title);
+        action.setContentDescription(title);
+        action.setClickable(true);
+        action.setFocusable(true);
+        if (template != null) {
+            action.setTextColor(template.getTextColors());
+            action.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, template.getTextSize());
+            action.setTypeface(template.getTypeface());
+            action.setGravity(template.getGravity());
+            action.setPadding(
+                template.getPaddingLeft(), template.getPaddingTop(),
+                template.getPaddingRight(), template.getPaddingBottom()
+            );
+            action.setMinHeight(template.getMinHeight());
+            action.setLayoutParams(copyLayoutParams(template.getLayoutParams()));
+            if (template.getBackground() != null
+                && template.getBackground().getConstantState() != null) {
+                action.setBackground(template.getBackground().getConstantState().newDrawable());
+            }
+        } else {
+            action.setPadding(dp(list.getContext(), 16), 0, dp(list.getContext(), 16), 0);
+            action.setMinHeight(dp(list.getContext(), 56));
+            action.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+        }
+        action.setOnClickListener(view -> {
+            if (copy) {
+                copyOriginalLink(view.getContext());
+            } else {
+                shareOriginal(view.getContext());
+            }
+            dialog.dismiss();
+        });
+        int insertAt = cancel == null ? list.getChildCount() : list.indexOfChild(cancel);
+        list.addView(action, Math.max(0, insertAt));
+    }
+
+    private static Object findBoundMediaModel(View view) {
+        try {
+            Object listeners = findField(View.class, "mListenerInfo").get(view);
+            Object listenerModel = findMediaModel(
+                listeners, 4, new IdentityHashMap<>(), new int[] {0}
+            );
+            if (listenerModel != null) {
+                return listenerModel;
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Recycler/view-holder lookup below supports implementations that hide listeners.
+        }
+        View current = view;
+        while (current != null) {
+            Object tagged = findMediaModel(
+                current.getTag(), 3, new IdentityHashMap<>(), new int[] {0}
+            );
+            if (tagged != null) {
+                return tagged;
+            }
+            ViewParent parent = current.getParent();
+            if (!(parent instanceof View)) {
+                break;
+            }
+            View parentView = (View) parent;
+            if (parentView.getClass().getName().contains("RecyclerView")) {
+                try {
+                    Method holderMethod = parentView.getClass()
+                        .getMethod("getChildViewHolder", View.class);
+                    Object holder = holderMethod.invoke(parentView, current);
+                    Object model = findMediaModel(
+                        holder, 4, new IdentityHashMap<>(), new int[] {0}
+                    );
+                    if (model != null) {
+                        return model;
+                    }
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    return null;
+                }
+            }
+            current = parentView;
+        }
+        return null;
+    }
+
+    private static Object findMediaModel(
+        Object candidate,
+        int depth,
+        Map<Object, Boolean> visited,
+        int[] inspected
+    ) {
+        if (candidate == null || depth < 0 || inspected[0]++ > 150
+            || visited.put(candidate, Boolean.TRUE) != null) {
+            return null;
+        }
+        if (looksLikeMediaModel(candidate)) {
+            return candidate;
+        }
+        if (candidate instanceof View || candidate instanceof Context) {
+            return null;
+        }
+        Class<?> type = candidate.getClass();
+        String name = type.getName();
+        if (type.isPrimitive() || type.isEnum() || name.startsWith("java.lang.")) {
+            return null;
+        }
+        for (Class<?> current = type; current != null && current != Object.class;
+             current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive()) {
+                    continue;
+                }
+                try {
+                    field.setAccessible(true);
+                    Object found = findMediaModel(
+                        field.get(candidate), depth - 1, visited, inspected
+                    );
+                    if (found != null) {
+                        return found;
+                    }
+                } catch (IllegalAccessException | RuntimeException ignored) {
+                    // Continue through accessible binding/view-holder fields.
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean looksLikeMediaModel(Object value) {
+        String name = value.getClass().getName();
+        if (name.endsWith("ImageMediaModel")) {
+            return true;
+        }
+        try {
+            value.getClass().getMethod("getIdStr");
+            value.getClass().getMethod("getResponsiveImageUrl");
+            value.getClass().getMethod("getOwnerSiteData");
+            value.getClass().getMethod("isDsco");
+            return true;
+        } catch (NoSuchMethodException ignored) {
+            return false;
         }
     }
 
@@ -565,6 +863,22 @@ public final class DownloadPostsPatch {
     }
 
     private static ViewGroup.LayoutParams copyLayoutParams(ViewGroup.LayoutParams original) {
+        try {
+            Constructor<?> exactCopy = original.getClass().getConstructor(original.getClass());
+            return (ViewGroup.LayoutParams) exactCopy.newInstance(original);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Some framework parameter classes only expose a superclass copy constructor.
+        }
+        for (Constructor<?> constructor : original.getClass().getConstructors()) {
+            Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if (parameterTypes.length == 1 && parameterTypes[0].isInstance(original)) {
+                try {
+                    return (ViewGroup.LayoutParams) constructor.newInstance(original);
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    // Fall through to the Android layout-parameter copies below.
+                }
+            }
+        }
         if (original instanceof LinearLayout.LayoutParams) {
             return new LinearLayout.LayoutParams((LinearLayout.LayoutParams) original);
         }
@@ -578,6 +892,18 @@ public final class DownloadPostsPatch {
             return new ViewGroup.MarginLayoutParams((ViewGroup.MarginLayoutParams) original);
         }
         return new ViewGroup.LayoutParams(original);
+    }
+
+    private static void setIntField(Object target, String name, int value) {
+        try {
+            target.getClass().getField(name).setInt(target, value);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // These fields are supplied by ConstraintLayout on supported VSCO versions.
+        }
+    }
+
+    private static int dp(Context context, int value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
     }
 
     private static String safeFilePart(String value) {

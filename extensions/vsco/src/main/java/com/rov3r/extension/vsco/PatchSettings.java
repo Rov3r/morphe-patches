@@ -7,7 +7,6 @@ import android.content.SharedPreferences;
 import android.graphics.Typeface;
 import android.preference.PreferenceManager;
 import android.text.InputType;
-import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -40,6 +39,9 @@ public final class PatchSettings {
     static final String FILE_NAME_TEMPLATE = "file_name_template";
     static final String COPY_LINK_BUTTON = "copy_link_button";
     static final String SHARE_LINK_BUTTON = "share_link_button";
+    static final String HIDE_ACTION_FAVORITE = "hide_action_favorite";
+    static final String HIDE_ACTION_REPOST = "hide_action_repost";
+    static final String HIDE_ACTION_MESSAGE = "hide_action_message";
     static final String PROFILE_PHOTO_VIEWER = "profile_photo_viewer";
     static final String HIDE_PROFILE_FOLLOW = "hide_profile_follow";
     static final String HIDE_PROFILE_MESSAGE = "hide_profile_message";
@@ -90,6 +92,18 @@ public final class PatchSettings {
         "upsell_description",
         "upsell_icon",
         "upsell_title"
+    );
+
+    private static final Set<String> FAVORITE_ACTION_IDS = setOf(
+        "detail_view_favorite_button"
+    );
+
+    private static final Set<String> REPOST_ACTION_IDS = setOf(
+        "detail_view_republish_button"
+    );
+
+    private static final Set<String> MESSAGE_ACTION_IDS = setOf(
+        "detail_view_forward_button"
     );
 
     private static final Map<View, Integer> ORIGINAL_VISIBILITY =
@@ -156,107 +170,18 @@ public final class PatchSettings {
     }
 
     private static void attachMenuEntry(Activity activity, View decor) {
-        int settingsId = resourceId(activity, "id", "settings");
-        if (settingsId == 0) {
+        int patchSettingsId = resourceId(activity, "id", "morphe_patch_settings");
+        if (patchSettingsId == 0) {
             return;
         }
-        View settingsView = decor.findViewById(settingsId);
-        if (!(settingsView instanceof TextView) || !(settingsView.getParent() instanceof ViewGroup)) {
+        View patchSettings = decor.findViewById(patchSettingsId);
+        if (!(patchSettings instanceof TextView) || MENU_TAG.equals(patchSettings.getTag())) {
             return;
         }
-        ViewGroup parent = (ViewGroup) settingsView.getParent();
-        if (parent.findViewWithTag(MENU_TAG) != null) {
-            return;
-        }
-
-        TextView settings = (TextView) settingsView;
-        TextView patchSettings = new TextView(activity);
-        patchSettings.setId(View.generateViewId());
         patchSettings.setTag(MENU_TAG);
-        patchSettings.setText("Patch Settings");
-        patchSettings.setTextColor(settings.getTextColors());
-        patchSettings.setTextSize(TypedValue.COMPLEX_UNIT_PX, settings.getTextSize());
-        patchSettings.setTypeface(settings.getTypeface());
-        patchSettings.setGravity(settings.getGravity());
-        patchSettings.setPadding(
-            settings.getPaddingLeft(),
-            settings.getPaddingTop(),
-            settings.getPaddingRight(),
-            settings.getPaddingBottom()
-        );
         patchSettings.setClickable(true);
         patchSettings.setFocusable(true);
-        if (settings.getBackground() != null && settings.getBackground().getConstantState() != null) {
-            patchSettings.setBackground(settings.getBackground().getConstantState().newDrawable());
-        }
         patchSettings.setOnClickListener(view -> show(activity));
-
-        ViewGroup.LayoutParams settingsParams = settings.getLayoutParams();
-        ViewGroup.LayoutParams newParams = copyConstraintLayoutParams(settingsParams);
-        if (newParams == null) {
-            return;
-        }
-        int originalTopTarget = getIntField(settingsParams, "topToBottom", -1);
-        setIntField(newParams, "topToBottom", originalTopTarget);
-        setIntField(settingsParams, "topToBottom", patchSettings.getId());
-        patchSettings.setLayoutParams(newParams);
-        settings.setLayoutParams(settingsParams);
-        parent.addView(patchSettings, parent.indexOfChild(settings));
-    }
-
-    private static ViewGroup.LayoutParams copyConstraintLayoutParams(ViewGroup.LayoutParams source) {
-        try {
-            Object copy = source.getClass()
-                .getConstructor(ViewGroup.LayoutParams.class)
-                .newInstance(source);
-            return (ViewGroup.LayoutParams) copy;
-        } catch (Exception ignored) {
-            try {
-                Object copy = source.getClass()
-                    .getConstructor(int.class, int.class)
-                    .newInstance(source.width, source.height);
-                if (copy instanceof ViewGroup.MarginLayoutParams
-                    && source instanceof ViewGroup.MarginLayoutParams) {
-                    ViewGroup.MarginLayoutParams from = (ViewGroup.MarginLayoutParams) source;
-                    ViewGroup.MarginLayoutParams to = (ViewGroup.MarginLayoutParams) copy;
-                    to.setMargins(from.leftMargin, from.topMargin, from.rightMargin, from.bottomMargin);
-                    to.setMarginStart(from.getMarginStart());
-                    to.setMarginEnd(from.getMarginEnd());
-                }
-                copyPublicIntFields(source, copy);
-                return (ViewGroup.LayoutParams) copy;
-            } catch (Exception ignoredAgain) {
-                return null;
-            }
-        }
-    }
-
-    private static void copyPublicIntFields(Object source, Object target) {
-        for (Field field : source.getClass().getFields()) {
-            if (field.getType() == int.class) {
-                try {
-                    field.setInt(target, field.getInt(source));
-                } catch (IllegalAccessException ignored) {
-                    // Ignore fields the layout implementation does not expose for writes.
-                }
-            }
-        }
-    }
-
-    private static int getIntField(Object target, String name, int fallback) {
-        try {
-            return target.getClass().getField(name).getInt(target);
-        } catch (Exception ignored) {
-            return fallback;
-        }
-    }
-
-    private static void setIntField(Object target, String name, int value) {
-        try {
-            target.getClass().getField(name).setInt(target, value);
-        } catch (Exception ignored) {
-            // The parent is expected to be ConstraintLayout on supported VSCO versions.
-        }
     }
 
     private static void show(Activity activity) {
@@ -270,8 +195,6 @@ public final class PatchSettings {
         addSwitch(content, prefs, "Enable download tools", DOWNLOAD_TOOLS, true, null);
         addSwitch(content, prefs, "Organize downloads by username", ORGANIZE_BY_USERNAME, true, null);
         addSwitch(content, prefs, "Include timestamps in filenames", INCLUDE_TIMESTAMP, true, null);
-        addSwitch(content, prefs, "Show Copy original link button", COPY_LINK_BUTTON, true, null);
-        addSwitch(content, prefs, "Show Share original button", SHARE_LINK_BUTTON, true, null);
 
         TextView templateLabel = label(activity, "Filename template");
         content.addView(templateLabel);
@@ -293,6 +216,19 @@ public final class PatchSettings {
         chooseFolder.setText("Choose download folder");
         chooseFolder.setOnClickListener(view -> DownloadPostsPatch.chooseDownloadDestination(activity));
         content.addView(chooseFolder, matchWrap());
+
+        addSection(content, "Post action row");
+        addSwitch(content, prefs, "Hide Favorite action", HIDE_ACTION_FAVORITE, false, null);
+        addSwitch(content, prefs, "Hide Repost action", HIDE_ACTION_REPOST, false, null);
+        addSwitch(content, prefs, "Hide Message action", HIDE_ACTION_MESSAGE, false, null);
+        addSwitch(content, prefs, "Show Copy direct-link action", COPY_LINK_BUTTON, false, null);
+        addSwitch(content, prefs, "Show Share direct-link action", SHARE_LINK_BUTTON, false, null);
+        TextView actionHelp = label(
+            activity,
+            "Copy and Share use space freed by hidden native actions. Both remain available in the post's three-dot menu."
+        );
+        actionHelp.setTextSize(12f);
+        content.addView(actionHelp);
 
         addSection(content, "Profile controls");
         addSwitch(content, prefs, "Full-quality profile photo viewer", PROFILE_PHOTO_VIEWER, true, null);
@@ -420,6 +356,22 @@ public final class PatchSettings {
     }
 
     private static void applyPreferences(Activity activity, View root) {
+        DownloadPostsPatch.attachFeedButtons(root);
+        applyVisibility(
+            root,
+            FAVORITE_ACTION_IDS,
+            enabled(activity, HIDE_ACTION_FAVORITE, false)
+        );
+        applyVisibility(
+            root,
+            REPOST_ACTION_IDS,
+            enabled(activity, HIDE_ACTION_REPOST, false)
+        );
+        applyVisibility(
+            root,
+            MESSAGE_ACTION_IDS,
+            enabled(activity, HIDE_ACTION_MESSAGE, false)
+        );
         applyVisibility(root, "user_profile_follow_button", enabled(activity, HIDE_PROFILE_FOLLOW, false));
         boolean hideMessage = enabled(activity, HIDE_PROFILE_MESSAGE, false);
         applyVisibility(root, "user_profile_message_button", hideMessage);

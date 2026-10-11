@@ -21,6 +21,13 @@ internal object SetupListenersFingerprint : Fingerprint(
     parameters = emptyList()
 )
 
+internal object ShowImageMenuFingerprint : Fingerprint(
+    definingClass = MEDIA_DETAIL_VIEW,
+    name = "showImageMenu",
+    returnType = "V",
+    parameters = listOf("Lcom/vsco/cam/bottommenu/BottomMenuState;")
+)
+
 internal object LithiumActivityOnCreateFingerprint : Fingerprint(
     definingClass = "Lcom/vsco/cam/navigation/LithiumActivity;",
     name = "onCreate",
