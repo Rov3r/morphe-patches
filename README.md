@@ -10,12 +10,21 @@ bundle.
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
+> **[v0.0.3](https://github.com/Rov3r/morphe-patches/releases/tag/v0.0.3)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
+<details open>
+<summary>📦 VSCO&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<br>
 
-<!-- This section is updated automatically by the release workflow. -->
+**🎯 Supported versions:**
 
-### VSCO
+| 489.1 |
+| :---: |
 
-- **Download posts** — Configurable original-quality downloads, profile tools, feed cleanup, media controls, and privacy options.
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Download posts](#download-posts) | Adds configurable original-quality downloads, profile tools, feed cleanup, media controls, and privacy options. |  |
+
+</details>
 
 <!-- PATCHES_END -->
 
