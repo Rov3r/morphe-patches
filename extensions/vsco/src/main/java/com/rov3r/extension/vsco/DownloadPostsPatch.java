@@ -1,7 +1,10 @@
 package com.rov3r.extension.vsco;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Fragment;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.ContextWrapper;
@@ -33,16 +36,22 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Runtime code injected into VSCO by the Morphe patch. */
 @SuppressWarnings({"unused", "JavaReflectionMemberAccess", "deprecation"})
 public final class DownloadPostsPatch {
-    private static final String BUTTON_TAG = "rov3r_morphe_vsco_download_button";
+    private static final String DOWNLOAD_BUTTON_TAG = "rov3r_morphe_vsco_download_button";
+    private static final String COPY_BUTTON_TAG = "rov3r_morphe_vsco_copy_button";
+    private static final String SHARE_BUTTON_TAG = "rov3r_morphe_vsco_share_button";
     private static final String NETWORK_UTILITY = "co.vsco.vsn.utility.NetworkUtility";
-    private static final String PREFERENCES = "rov3r_morphe_vsco";
-    private static final String DESTINATION_KEY = "download_destination";
     private static final String PICKER_TAG = "rov3r_morphe_vsco_directory_picker";
+    private static final Set<String> TRACKING_PARAMETERS = new HashSet<>(Arrays.asList(
+        "fbclid", "gclid", "dclid", "msclkid", "mc_cid", "mc_eid", "ref", "referrer"
+    ));
 
     private static WeakReference<Object> currentModel = new WeakReference<>(null);
 
@@ -64,7 +73,7 @@ public final class DownloadPostsPatch {
         }
 
         ViewGroup actionRow = (ViewGroup) favoriteButton.getParent();
-        if (actionRow.findViewWithTag(BUTTON_TAG) != null) {
+        if (actionRow.findViewWithTag(DOWNLOAD_BUTTON_TAG) != null) {
             return;
         }
 
@@ -73,12 +82,13 @@ public final class DownloadPostsPatch {
             return;
         }
 
-        ImageButton button = new ImageButton(context);
-        button.setTag(BUTTON_TAG);
+        ImageButton button = createActionButton(
+            context,
+            favoriteButton,
+            resourceId(context, "drawable", "morphe_vsco_download")
+        );
+        button.setTag(DOWNLOAD_BUTTON_TAG);
         button.setContentDescription("Download post. Long press to change save folder.");
-        button.setImageResource(iconId);
-        button.setBackgroundColor(Color.TRANSPARENT);
-        button.setLayoutParams(copyLayoutParams(favoriteButton.getLayoutParams()));
 
         int forwardId = resourceId(context, "id", "detail_view_forward_button");
         View forwardButton = detailView.findViewById(forwardId);
@@ -107,7 +117,82 @@ public final class DownloadPostsPatch {
             return true;
         });
 
-        actionRow.addView(button, actionRow.indexOfChild(favoriteButton) + 1);
+        ImageButton copyButton = createActionButton(
+            context,
+            favoriteButton,
+            resourceId(context, "drawable", "morphe_vsco_copy")
+        );
+        copyButton.setTag(COPY_BUTTON_TAG);
+        copyButton.setContentDescription("Copy original media link");
+        copyButton.setOnClickListener(view -> copyOriginalLink(view.getContext()));
+
+        ImageButton shareButton = createActionButton(
+            context,
+            favoriteButton,
+            resourceId(context, "drawable", "morphe_vsco_share")
+        );
+        shareButton.setTag(SHARE_BUTTON_TAG);
+        shareButton.setContentDescription("Share original media");
+        shareButton.setOnClickListener(view -> shareOriginal(view.getContext()));
+
+        int insertAt = actionRow.indexOfChild(favoriteButton) + 1;
+        actionRow.addView(button, insertAt++);
+        actionRow.addView(copyButton, insertAt++);
+        actionRow.addView(shareButton, insertAt);
+        applyButtonPreferences(actionRow);
+    }
+
+    private static ImageButton createActionButton(Context context, View template, int iconId) {
+        ImageButton button = new ImageButton(context);
+        button.setImageResource(iconId);
+        button.setBackgroundColor(Color.TRANSPARENT);
+        button.setLayoutParams(copyLayoutParams(template.getLayoutParams()));
+        button.setPadding(
+            template.getPaddingLeft(),
+            template.getPaddingTop(),
+            template.getPaddingRight(),
+            template.getPaddingBottom()
+        );
+        return button;
+    }
+
+    public static void applyButtonPreferences(View root) {
+        Object tag = root.getTag();
+        Context context = root.getContext();
+        boolean toolsEnabled = PatchSettings.enabled(
+            context,
+            PatchSettings.DOWNLOAD_TOOLS,
+            true
+        );
+        if (DOWNLOAD_BUTTON_TAG.equals(tag)) {
+            root.setVisibility(toolsEnabled ? View.VISIBLE : View.GONE);
+        } else if (COPY_BUTTON_TAG.equals(tag)) {
+            root.setVisibility(
+                toolsEnabled && PatchSettings.enabled(
+                    context,
+                    PatchSettings.COPY_LINK_BUTTON,
+                    true
+                ) ? View.VISIBLE : View.GONE
+            );
+        } else if (SHARE_BUTTON_TAG.equals(tag)) {
+            root.setVisibility(
+                toolsEnabled && PatchSettings.enabled(
+                    context,
+                    PatchSettings.SHARE_LINK_BUTTON,
+                    true
+                ) ? View.VISIBLE : View.GONE
+            );
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                applyButtonPreferences(group.getChildAt(i));
+            }
+        }
+    }
+
+    public static void chooseDownloadDestination(Context context) {
+        chooseDestination(context, false);
     }
 
     private static void chooseDestination(Context context, boolean downloadAfterSelection) {
@@ -129,8 +214,8 @@ public final class DownloadPostsPatch {
     }
 
     private static Uri savedDestination(Context context) {
-        SharedPreferences preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
-        String value = preferences.getString(DESTINATION_KEY, null);
+        SharedPreferences preferences = PatchSettings.preferences(context);
+        String value = preferences.getString(PatchSettings.DESTINATION_KEY, null);
         if (value == null || value.isEmpty()) {
             return null;
         }
@@ -146,12 +231,68 @@ public final class DownloadPostsPatch {
             }
         }
 
-        preferences.edit().remove(DESTINATION_KEY).apply();
+        preferences.edit().remove(PatchSettings.DESTINATION_KEY).apply();
         return null;
     }
 
+    public static Uri savedDestinationPublic(Context context) {
+        return savedDestination(context);
+    }
+
+    public static String safeFilePartPublic(String value) {
+        return safeFilePart(value);
+    }
+
+    public static String fullQualityUrl(String sourceUrl, boolean video) {
+        try {
+            return makeAbsoluteMediaUrl(sourceUrl, video);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return sourceUrl;
+        }
+    }
+
+    public static String createFileName(
+        Context context,
+        String id,
+        String username,
+        String type,
+        String extension
+    ) {
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String template = PatchSettings.text(
+            context,
+            PatchSettings.FILE_NAME_TEMPLATE,
+            PatchSettings.DEFAULT_FILE_NAME_TEMPLATE
+        );
+        return renderFileName(
+            template,
+            safeFilePart(id),
+            safeFilePart(username),
+            safeFilePart(type),
+            timestamp,
+            PatchSettings.enabled(context, PatchSettings.INCLUDE_TIMESTAMP, true)
+        ) + extension;
+    }
+
+    public static void saveExternalUrl(
+        Context context,
+        Uri destination,
+        String url,
+        String username,
+        String fileName,
+        String mimeType
+    ) {
+        DownloadInfo info = new DownloadInfo(url, safeFilePart(username), fileName, mimeType);
+        Context appContext = context.getApplicationContext();
+        showToast(appContext, "Downloading " + fileName);
+        new Thread(() -> {
+            boolean saved = downloadToFolder(appContext, destination, info);
+            showToast(appContext, saved ? "Saved " + fileName : "Couldn't download " + fileName);
+        }, "Morphe-VSCO-External-Download").start();
+    }
+
     private static void queueDownload(Context context, Uri destination) {
-        final DownloadInfo info = currentDownloadInfo();
+        final DownloadInfo info = currentDownloadInfo(context);
         if (info == null) {
             showToast(context, "Couldn't download - media unavailable");
             return;
@@ -168,7 +309,7 @@ public final class DownloadPostsPatch {
         }, "Morphe-VSCO-Download").start();
     }
 
-    private static DownloadInfo currentDownloadInfo() {
+    private static DownloadInfo currentDownloadInfo(Context context) {
         Object model = currentModel.get();
         if (model == null) {
             return null;
@@ -194,8 +335,13 @@ public final class DownloadPostsPatch {
 
             String extension = isVideo ? ".mp4" : imageExtension(downloadUrl);
             String mimeType = isVideo ? "video/mp4" : imageMimeType(extension);
-            String fileName = "vsco_" + (mediaId.isEmpty() ? "post" : mediaId)
-                + "_" + System.currentTimeMillis() + extension;
+            String fileName = createFileName(
+                context,
+                mediaId.isEmpty() ? "post" : mediaId,
+                username,
+                isVideo ? "video" : "image",
+                extension
+            );
             return new DownloadInfo(downloadUrl, username, fileName, mimeType);
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             return null;
@@ -211,9 +357,12 @@ public final class DownloadPostsPatch {
                 treeUri,
                 DocumentsContract.getTreeDocumentId(treeUri)
             );
-            Uri userFolder = findOrCreateDirectory(resolver, root, info.username);
-            if (userFolder == null) {
-                return false;
+            Uri outputFolder = root;
+            if (PatchSettings.enabled(context, PatchSettings.ORGANIZE_BY_USERNAME, true)) {
+                outputFolder = findOrCreateDirectory(resolver, root, info.username);
+                if (outputFolder == null) {
+                    return false;
+                }
             }
 
             connection = (HttpURLConnection) new URL(info.url).openConnection();
@@ -228,7 +377,7 @@ public final class DownloadPostsPatch {
 
             outputUri = DocumentsContract.createDocument(
                 resolver,
-                userFolder,
+                outputFolder,
                 info.mimeType,
                 info.fileName
             );
@@ -318,6 +467,61 @@ public final class DownloadPostsPatch {
         );
     }
 
+    private static void copyOriginalLink(Context context) {
+        DownloadInfo info = currentDownloadInfo(context);
+        if (info == null) {
+            showToast(context, "Couldn't copy link - media unavailable");
+            return;
+        }
+        String url = removeTrackingParameters(info.url);
+        ClipboardManager clipboard =
+            (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null) {
+            showToast(context, "Clipboard unavailable");
+            return;
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText("Original VSCO media", url));
+        showToast(context, "Original media link copied");
+    }
+
+    private static void shareOriginal(Context context) {
+        DownloadInfo info = currentDownloadInfo(context);
+        if (info == null) {
+            showToast(context, "Couldn't share - media unavailable");
+            return;
+        }
+        Intent share = new Intent(Intent.ACTION_SEND);
+        share.setType("text/plain");
+        share.putExtra(Intent.EXTRA_TEXT, removeTrackingParameters(info.url));
+        Intent chooser = Intent.createChooser(share, "Share original media");
+        if (!(context instanceof Activity)) {
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        context.startActivity(chooser);
+    }
+
+    private static String removeTrackingParameters(String value) {
+        try {
+            Uri uri = Uri.parse(value);
+            if (uri.getQuery() == null) {
+                return value;
+            }
+            Uri.Builder clean = uri.buildUpon().clearQuery();
+            for (String key : uri.getQueryParameterNames()) {
+                String lower = key.toLowerCase(java.util.Locale.US);
+                if (lower.startsWith("utm_") || TRACKING_PARAMETERS.contains(lower)) {
+                    continue;
+                }
+                for (String parameterValue : uri.getQueryParameters(key)) {
+                    clean.appendQueryParameter(key, parameterValue);
+                }
+            }
+            return clean.build().toString();
+        } catch (RuntimeException ignored) {
+            return value;
+        }
+    }
+
     private static String makeAbsoluteMediaUrl(String sourceUrl, boolean isVideo)
         throws ReflectiveOperationException {
         if (sourceUrl == null || sourceUrl.isEmpty()) {
@@ -383,8 +587,36 @@ public final class DownloadPostsPatch {
         return value.replaceAll("[^A-Za-z0-9._-]", "_");
     }
 
+    private static String renderFileName(
+        String template,
+        String id,
+        String username,
+        String type,
+        String timestamp,
+        boolean includeTimestamp
+    ) {
+        String chosen = template == null || template.trim().isEmpty()
+            ? PatchSettings.DEFAULT_FILE_NAME_TEMPLATE
+            : template.trim();
+        chosen = chosen
+            .replace("{id}", id)
+            .replace("{username}", username)
+            .replace("{type}", type)
+            .replace("{timestamp}", includeTimestamp ? timestamp : "");
+        if (includeTimestamp && !templateContainsTimestamp(template)) {
+            chosen += "_" + timestamp;
+        }
+        chosen = safeFilePart(chosen).replaceAll("_+", "_");
+        chosen = chosen.replaceAll("^[._-]+|[._-]+$", "");
+        return chosen.isEmpty() ? "vsco_post" : chosen;
+    }
+
+    private static boolean templateContainsTimestamp(String template) {
+        return template != null && template.contains("{timestamp}");
+    }
+
     private static String imageExtension(String url) {
-        String lower = url.toLowerCase();
+        String lower = url.toLowerCase(java.util.Locale.ROOT);
         if (lower.contains(".png")) {
             return ".png";
         }
@@ -455,6 +687,7 @@ public final class DownloadPostsPatch {
         }
 
         @Override
+        @SuppressLint("WrongConstant")
         public void onActivityResult(int requestCode, int resultCode, Intent data) {
             super.onActivityResult(requestCode, resultCode, data);
             Activity activity = getActivity();
@@ -469,9 +702,9 @@ public final class DownloadPostsPatch {
                     & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 try {
                     activity.getContentResolver().takePersistableUriPermission(destination, flags);
-                    activity.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                    activity.getSharedPreferences(PatchSettings.PREFERENCES, Context.MODE_PRIVATE)
                         .edit()
-                        .putString(DESTINATION_KEY, destination.toString())
+                        .putString(PatchSettings.DESTINATION_KEY, destination.toString())
                         .apply();
                     showToast(activity, "Download folder saved");
                     Bundle arguments = getArguments();

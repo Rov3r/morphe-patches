@@ -20,3 +20,27 @@ internal object SetupListenersFingerprint : Fingerprint(
     returnType = "V",
     parameters = emptyList()
 )
+
+internal object LithiumActivityOnCreateFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/cam/navigation/LithiumActivity;",
+    name = "onCreate",
+    returnType = "V",
+    parameters = listOf("Landroid/os/Bundle;")
+)
+
+internal object ProfileHeaderImageFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/cam/profile/profiles/views/ProfileHeaderDelegate;",
+    name = "setHeaderProfileImage",
+    returnType = "V",
+    parameters = listOf(
+        "Lcom/vsco/cam/profile/profiles/views/ProfileHeaderDelegate\$ProfileHeaderViewHolder;",
+        "Lcom/vsco/cam/account/UserModel;"
+    )
+)
+
+internal object ProfileSpacesHeaderImageFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/cam/profile/profiles/views/ProfileSpacesTabHeaderCardView;",
+    name = "setHeaderProfileImage",
+    returnType = "V",
+    parameters = listOf("Lcom/vsco/cam/account/UserModel;")
+)

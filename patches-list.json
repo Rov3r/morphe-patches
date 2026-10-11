@@ -4,7 +4,7 @@
   "patches": [
     {
       "name": "Download posts",
-      "description": "Adds a button that downloads VSCO images and DSCO videos at their original quality to a folder you choose.",
+      "description": "Adds configurable original-quality downloads, profile tools, feed cleanup, media controls, and privacy options.",
       "default": true,
       "category": null,
       "dependencies": [

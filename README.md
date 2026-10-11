@@ -15,9 +15,24 @@ bundle.
 
 ### VSCO
 
-- **Download posts** — Downloads images and DSCO videos at their original quality to a folder you choose. The folder is remembered; long-press the download button to change it.
+- **Download posts** — Configurable original-quality downloads, profile tools, feed cleanup, media controls, and privacy options.
 
 <!-- PATCHES_END -->
+
+## VSCO feature controls
+
+The patch adds a **Patch Settings** entry above VSCO's Settings menu with:
+
+- Original-quality image and DSCO downloads to a remembered folder.
+- Optional username subfolders, filename templates, and timestamp control.
+- Tracking-clean copy-link and share-original actions.
+- A long-press, full-quality profile-photo viewer with a save action.
+- Toggles for profile buttons/badges, suggested users, membership prompts, and promotional cards.
+- Video autoplay and unmute controls.
+- Selective usage-analytics and marketing-attribution blocking.
+
+Filename templates support `{id}`, `{username}`, `{type}`, and `{timestamp}`.
+Location is never used in filenames or folder organization.
 
 ## Build
 
@@ -36,19 +51,6 @@ bundle.
    ```
 
 The patch bundle is written to `patches/build/libs/`.
-
-## Repository layout
-
-- `patches/src/main/kotlin/com/rov3r/patches/<app>/` contains each app's patch
-  definitions, fingerprints, and compatibility metadata.
-- `extensions/<app>/` contains runtime code merged into that app.
-- Each extension writes a uniquely named file such as `extensions/vsco.mpe` into
-  the shared patch bundle.
-
-To add another app, create a separate package beneath `com.rov3r.patches`, add a
-matching extension module only if runtime code is needed, and declare that app's
-own `Compatibility` targets. All visible patches are published together in the
-same `.mpp` bundle.
 
 ## Releases
 
