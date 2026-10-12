@@ -1,3 +1,9 @@
+## [0.0.6](https://github.com/Rov3r/morphe-patches/compare/v0.0.5...v0.0.6) (2026-10-12)
+
+### 🐛 Bug Fixes
+
+* **vsco:** correct feed actions and settings spacing ([3255a8e](https://github.com/Rov3r/morphe-patches/commit/3255a8e0b718eadc49e1531c42f750a0d1d94253))
+
 ## [0.0.5](https://github.com/Rov3r/morphe-patches/compare/v0.0.4...v0.0.5) (2026-10-12)
 
 ### 🐛 Bug Fixes
