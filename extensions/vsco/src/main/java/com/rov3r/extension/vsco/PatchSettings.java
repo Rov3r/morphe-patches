@@ -2,8 +2,6 @@ package com.rov3r.extension.vsco;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.SharedPreferences;
@@ -122,7 +120,6 @@ public final class PatchSettings {
         if (activity == null) {
             return;
         }
-        OfflineAuthorization.initialize(activity);
         installBeforeContentView(activity);
     }
 
@@ -278,100 +275,6 @@ public final class PatchSettings {
         privacyHelp.setTextSize(12f);
         content.addView(privacyHelp);
 
-        addSection(content, "Offline subscriber authorization");
-        TextView authorizationStatus = label(activity, OfflineAuthorization.status(activity));
-        authorizationStatus.setTextSize(13f);
-        content.addView(authorizationStatus);
-
-        Button copyActivationRequest = new Button(activity);
-        copyActivationRequest.setText("Copy activation request");
-        copyActivationRequest.setOnClickListener(view -> {
-            ClipboardManager clipboard =
-                (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
-            clipboard.setPrimaryClip(
-                ClipData.newPlainText(
-                    "VSCO offline activation request",
-                    OfflineAuthorization.activationRequest(activity)
-                )
-            );
-            Toast.makeText(activity, "Activation request copied", Toast.LENGTH_SHORT).show();
-        });
-        content.addView(copyActivationRequest, matchWrap());
-
-        Button importAuthorization = new Button(activity);
-        importAuthorization.setText("Import offline authorization");
-        importAuthorization.setOnClickListener(view ->
-            showAuthorizationImport(activity, authorizationStatus)
-        );
-        content.addView(importAuthorization, matchWrap());
-
-        Button clearAuthorization = new Button(activity);
-        clearAuthorization.setText("Clear offline authorization");
-        clearAuthorization.setOnClickListener(view -> {
-            OfflineAuthorization.clear(activity);
-            authorizationStatus.setText(OfflineAuthorization.status(activity));
-            Toast.makeText(activity, "Offline authorization cleared", Toast.LENGTH_SHORT).show();
-        });
-        content.addView(clearAuthorization, matchWrap());
-
-        TextView authorizationHelp = label(
-            activity,
-            "After a receipt is manually verified, transfer the signed authorization file to this device and paste its contents here. This does not change VSCO's online account state."
-        );
-        authorizationHelp.setTextSize(12f);
-        content.addView(authorizationHelp);
-
-        if (OfflineAuthorization.isQaMode(activity)) {
-            addSection(content, "Offline authorization A/B test");
-
-            Button qaTier = new Button(activity);
-            qaTier.setText("Simulated tier: " + OfflineAuthorization.qaTier(activity));
-            qaTier.setOnClickListener(view -> {
-                qaTier.setText(
-                    "Simulated tier: " + OfflineAuthorization.cycleQaTier(activity)
-                );
-                Toast.makeText(
-                    activity,
-                    "Tier changed. Force-close and reopen VSCO before testing.",
-                    Toast.LENGTH_LONG
-                ).show();
-            });
-            content.addView(qaTier, matchWrap());
-
-            Button qaVariant = new Button(activity);
-            qaVariant.setText("Experiment: " + OfflineAuthorization.qaVariant(activity));
-            qaVariant.setOnClickListener(view -> {
-                qaVariant.setText(
-                    "Experiment: " + OfflineAuthorization.cycleQaVariant(activity)
-                );
-                Toast.makeText(
-                    activity,
-                    "Experiment changed. Force-close and reopen VSCO before testing.",
-                    Toast.LENGTH_LONG
-                ).show();
-            });
-            content.addView(qaVariant, matchWrap());
-
-            TextView diagnostics = label(activity, OfflineAuthorization.diagnostics());
-            diagnostics.setTextSize(13f);
-            content.addView(diagnostics);
-
-            Button resetDiagnostics = new Button(activity);
-            resetDiagnostics.setText("Reset hook counters");
-            resetDiagnostics.setOnClickListener(view -> {
-                OfflineAuthorization.resetDiagnostics();
-                diagnostics.setText(OfflineAuthorization.diagnostics());
-            });
-            content.addView(resetDiagnostics, matchWrap());
-
-            TextView qaHelp = label(
-                activity,
-                "QA controls are visible only with a signed test authorization. Use Control, Catalog, Membership, Tier, then Combined; restart VSCO and reopen this screen after each editor test to read the counters."
-            );
-            qaHelp.setTextSize(12f);
-            content.addView(qaHelp);
-        }
-
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(content);
         AlertDialog dialog = new AlertDialog.Builder(activity)
@@ -403,38 +306,6 @@ public final class PatchSettings {
             });
         });
         dialog.show();
-    }
-
-    private static void showAuthorizationImport(Activity activity, TextView status) {
-        EditText token = new EditText(activity);
-        token.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        token.setMinLines(4);
-        token.setHint("vsco-offline-license-v1…");
-        token.setContentDescription("Signed offline authorization");
-
-        AlertDialog importDialog = new AlertDialog.Builder(activity)
-            .setTitle("Import offline authorization")
-            .setMessage("Paste the complete contents of the issued .license.txt file.")
-            .setView(token)
-            .setPositiveButton("Import", null)
-            .setNegativeButton("Cancel", null)
-            .create();
-        importDialog.setOnShowListener(ignored ->
-            importDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-                String error = OfflineAuthorization.importLicense(
-                    activity,
-                    token.getText().toString()
-                );
-                if (error != null) {
-                    token.setError(error);
-                    return;
-                }
-                status.setText(OfflineAuthorization.status(activity));
-                Toast.makeText(activity, "Offline authorization installed", Toast.LENGTH_SHORT).show();
-                importDialog.dismiss();
-            })
-        );
-        importDialog.show();
     }
 
     private interface ToggleListener {

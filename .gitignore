@@ -14,9 +14,3 @@ local.properties
 
 # Keep credentials out of source control. Use ~/.gradle/gradle.properties.
 gradle.properties.local
-
-# Offline-authorization issuer material must remain local and off-repository.
-offline-license-issuer/
-*.dpapi
-*.license.txt
-*.request.txt

@@ -10,7 +10,7 @@ bundle.
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v0.0.9](https://github.com/Rov3r/morphe-patches/releases/tag/v0.0.9)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
+> **[v0.0.7](https://github.com/Rov3r/morphe-patches/releases/tag/v0.0.7)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
 <details open>
 <summary>📦 VSCO&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
 <br>
@@ -22,7 +22,7 @@ bundle.
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Download posts](#download-posts) | Adds configurable downloads, profile tools, offline subscriber authorization, feed cleanup, media controls, and privacy options. |  |
+| [Download posts](#download-posts) | Adds configurable original-quality downloads, profile tools, feed cleanup, media controls, and privacy options. |  |
 
 </details>
 
@@ -39,30 +39,9 @@ The patch adds a **Patch Settings** entry above VSCO's Settings menu with:
 - Toggles for profile buttons/badges, suggested users, membership prompts, and promotional cards.
 - Video autoplay and unmute controls.
 - Selective usage-analytics and marketing-attribution blocking.
-- Device-bound offline authorization for manually verified subscribers.
 
 Filename templates support `{id}`, `{username}`, `{type}`, and `{timestamp}`.
 Location is never used in filenames or folder organization.
-
-### Offline subscriber authorization
-
-An offline device can create an activation request from **Patch Settings**.
-After the maintainer verifies the subscriber's original receipt, the maintainer
-can return a signed authorization limited to that receipt's feature tier and
-expiration. The user transfers the text file by USB, SD card, or Bluetooth and
-imports its contents in Patch Settings; the target device never needs a network
-connection.
-
-Authorizations are bound to one VSCO installation and cannot be extended or
-edited without invalidating their signature. The APK contains only the public
-verification key. Receipt data and the private issuer key are not part of this
-repository or release artifacts.
-
-Pre-release QA builds support short-lived, issuer-signed test authorizations.
-Those tokens expose controls for simulating Plus, Pro, and VSCO One and for
-testing catalog, membership, and tier gates independently. QA tokens expire
-within seven days; these controls are temporary and will be removed before a
-stable release.
 
 ## Build
 
@@ -84,8 +63,8 @@ The patch bundle is written to `patches/build/libs/`.
 
 ## Releases
 
-The included workflow currently marks every generated GitHub release as a
-prerelease. Use semantic `feat:` and `fix:` commits so the release workflow updates
+The included workflows publish prereleases from `dev` and stable releases from
+`main`. Use semantic `feat:` and `fix:` commits so the release workflow updates
 the bundle metadata, changelog, and patch list automatically.
 
 ## License
