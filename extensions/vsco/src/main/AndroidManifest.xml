@@ -1,1 +1,9 @@
-<manifest/>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="com.rov3r.extension.vsco.OfflineAuthorizationProvider"
+            android:authorities="${applicationId}.rov3r.offlineauthorization"
+            android:exported="false"
+            android:initOrder="100" />
+    </application>
+</manifest>

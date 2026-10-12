@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Verifies device-bound, manually issued offline subscriber authorizations. */
 @SuppressWarnings("unused")
@@ -32,6 +33,17 @@ public final class OfflineAuthorization {
     private static final String INSTALLATION_KEY_ALIAS = "rov3r_vsco_offline_installation_v1";
     private static final String LICENSE_KEY = "offline_auth_license";
     private static final String LAST_SEEN_TIME_KEY = "offline_auth_last_seen_seconds";
+    private static final String QA_VARIANT_KEY = "offline_auth_qa_variant";
+    private static final String QA_TIER_KEY = "offline_auth_qa_tier";
+
+    private static final int PATH_CATALOG = 1;
+    private static final int PATH_MEMBERSHIP = 2;
+    private static final int PATH_TIER = 3;
+    private static final int QA_CONTROL = 0;
+    private static final int QA_CATALOG = 1;
+    private static final int QA_MEMBERSHIP = 2;
+    private static final int QA_TIER = 3;
+    private static final int QA_COMBINED = 4;
 
     private static final String REQUEST_PREFIX = "vsco-offline-request-v1.";
     private static final String LICENSE_PREFIX = "vsco-offline-license-v1.";
@@ -43,6 +55,9 @@ public final class OfflineAuthorization {
 
     private static volatile Context applicationContext;
     private static volatile Authorization cachedAuthorization;
+    private static final AtomicInteger CATALOG_HITS = new AtomicInteger();
+    private static final AtomicInteger MEMBERSHIP_HITS = new AtomicInteger();
+    private static final AtomicInteger TIER_HITS = new AtomicInteger();
 
     private OfflineAuthorization() {
     }
@@ -104,14 +119,116 @@ public final class OfflineAuthorization {
         return authorization.features.contains(feature);
     }
 
-    /** Preserves VSCO's result and adds only a currently valid offline tool grant. */
+    /** Preserves VSCO's result and adds only a currently valid offline catalog grant. */
     public static boolean allowEditing(boolean originalValue) {
-        return originalValue || isFeatureEnabled("editing");
+        CATALOG_HITS.incrementAndGet();
+        return originalValue || (shouldApply(PATH_CATALOG) && isFeatureEnabled("editing"));
     }
 
     /** Preserves VSCO's result and adds only a currently valid offline preset grant. */
     public static boolean allowFilters(boolean originalValue) {
-        return originalValue || isFeatureEnabled("filters");
+        CATALOG_HITS.incrementAndGet();
+        return originalValue || (shouldApply(PATH_CATALOG) && isFeatureEnabled("filters"));
+    }
+
+    public static boolean allowMembership(boolean originalValue) {
+        MEMBERSHIP_HITS.incrementAndGet();
+        return originalValue || (shouldApply(PATH_MEMBERSHIP)
+            && (isFeatureEnabled("editing") || isFeatureEnabled("filters")));
+    }
+
+    public static boolean keepMemberOnly(boolean originalValue) {
+        MEMBERSHIP_HITS.incrementAndGet();
+        return originalValue && !(shouldApply(PATH_MEMBERSHIP) && isFeatureEnabled("editing"));
+    }
+
+    public static boolean allowPlus(boolean originalValue) {
+        TIER_HITS.incrementAndGet();
+        String tier = activeTier();
+        boolean plusAccess = "Plus".equals(tier) || "Pro".equals(tier) || "VSCO One".equals(tier);
+        return originalValue || (shouldApply(PATH_TIER) && plusAccess);
+    }
+
+    public static boolean allowPro(boolean originalValue) {
+        TIER_HITS.incrementAndGet();
+        String tier = activeTier();
+        boolean proAccess = "Pro".equals(tier) || "VSCO One".equals(tier);
+        return originalValue || (shouldApply(PATH_TIER) && proAccess);
+    }
+
+    public static boolean allowOne(boolean originalValue) {
+        TIER_HITS.incrementAndGet();
+        return originalValue || (shouldApply(PATH_TIER) && "VSCO One".equals(activeTier()));
+    }
+
+    public static boolean keepProLocked(boolean originalValue) {
+        TIER_HITS.incrementAndGet();
+        String tier = activeTier();
+        boolean proAccess = "Pro".equals(tier) || "VSCO One".equals(tier);
+        return originalValue && !(shouldApply(PATH_TIER) && proAccess);
+    }
+
+    public static boolean isQaMode(Context context) {
+        initialize(context);
+        Authorization authorization = cachedAuthorization;
+        return authorization != null
+            && authorization.testMode
+            && authorization.expiresAt >= trustedNow(context);
+    }
+
+    public static String qaVariant(Context context) {
+        if (!isQaMode(context)) {
+            return "Unavailable";
+        }
+        switch (PatchSettings.preferences(context).getInt(QA_VARIANT_KEY, QA_COMBINED)) {
+            case QA_CONTROL: return "Control (stock gates)";
+            case QA_CATALOG: return "Catalog access only";
+            case QA_MEMBERSHIP: return "Membership gates only";
+            case QA_TIER: return "Tier gates only";
+            default: return "Combined paths";
+        }
+    }
+
+    public static String cycleQaVariant(Context context) {
+        if (!isQaMode(context)) {
+            return "Unavailable";
+        }
+        SharedPreferences preferences = PatchSettings.preferences(context);
+        int current = preferences.getInt(QA_VARIANT_KEY, QA_COMBINED);
+        preferences.edit().putInt(QA_VARIANT_KEY, (current + 1) % 5).apply();
+        return qaVariant(context);
+    }
+
+    public static String qaTier(Context context) {
+        if (!isQaMode(context)) {
+            return "Unavailable";
+        }
+        return normalizedTier(
+            PatchSettings.preferences(context).getString(QA_TIER_KEY, cachedAuthorization.tier)
+        );
+    }
+
+    public static String cycleQaTier(Context context) {
+        if (!isQaMode(context)) {
+            return "Unavailable";
+        }
+        String current = qaTier(context);
+        String next = "Plus".equals(current) ? "Pro"
+            : "Pro".equals(current) ? "VSCO One" : "Plus";
+        PatchSettings.preferences(context).edit().putString(QA_TIER_KEY, next).apply();
+        return next;
+    }
+
+    public static String diagnostics() {
+        return "Catalog=" + CATALOG_HITS.get()
+            + " | Membership=" + MEMBERSHIP_HITS.get()
+            + " | Tier=" + TIER_HITS.get();
+    }
+
+    public static void resetDiagnostics() {
+        CATALOG_HITS.set(0);
+        MEMBERSHIP_HITS.set(0);
+        TIER_HITS.set(0);
     }
 
     public static String status(Context context) {
@@ -126,7 +243,8 @@ public final class OfflineAuthorization {
         if (authorization.expiresAt < now) {
             return authorization.tier + " authorization expired " + date;
         }
-        return authorization.tier + " • valid through " + date + " • "
+        return authorization.tier + (authorization.testMode ? " QA" : "")
+            + " | valid through " + date + " | "
             + authorization.features.size() + " feature groups";
     }
 
@@ -172,6 +290,7 @@ public final class OfflineAuthorization {
         String receiptHash = payload.optString("receiptHash", "");
         long issuedAt = payload.optLong("issuedAt", 0L);
         long expiresAt = payload.optLong("expiresAt", 0L);
+        boolean testMode = payload.optBoolean("testMode", false);
         long now = trustedNow(context);
         if (tier.isEmpty() || !receiptHash.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("The authorization metadata is invalid");
@@ -181,6 +300,9 @@ public final class OfflineAuthorization {
         }
         if (expiresAt < now) {
             throw new IllegalArgumentException("The offline authorization has expired");
+        }
+        if (testMode && expiresAt - issuedAt > 7L * 86400L) {
+            throw new IllegalArgumentException("QA authorizations cannot exceed seven days");
         }
 
         JSONArray featureArray = payload.optJSONArray("features");
@@ -196,7 +318,44 @@ public final class OfflineAuthorization {
         if (features.isEmpty()) {
             throw new IllegalArgumentException("The authorization contains no supported features");
         }
-        return new Authorization(tier, expiresAt, features);
+        return new Authorization(normalizedTier(tier), expiresAt, features, testMode);
+    }
+
+    private static boolean shouldApply(int path) {
+        Context context = applicationContext;
+        Authorization authorization = cachedAuthorization;
+        if (context == null || authorization == null || authorization.expiresAt < trustedNow(context)) {
+            return false;
+        }
+        if (!authorization.testMode) {
+            return true;
+        }
+        int variant = PatchSettings.preferences(context).getInt(QA_VARIANT_KEY, QA_COMBINED);
+        return variant == QA_COMBINED || variant == path;
+    }
+
+    private static String activeTier() {
+        Authorization authorization = cachedAuthorization;
+        Context context = applicationContext;
+        if (authorization == null || context == null || authorization.expiresAt < trustedNow(context)) {
+            return "";
+        }
+        if (authorization.testMode) {
+            return normalizedTier(
+                PatchSettings.preferences(context).getString(QA_TIER_KEY, authorization.tier)
+            );
+        }
+        return normalizedTier(authorization.tier);
+    }
+
+    private static String normalizedTier(String tier) {
+        if (tier != null && ("VSCO One".equalsIgnoreCase(tier) || "One".equalsIgnoreCase(tier))) {
+            return "VSCO One";
+        }
+        if (tier != null && "Pro".equalsIgnoreCase(tier)) {
+            return "Pro";
+        }
+        return "Plus";
     }
 
     private static PublicKey publicKey() throws Exception {
@@ -268,11 +427,13 @@ public final class OfflineAuthorization {
         final String tier;
         final long expiresAt;
         final Set<String> features;
+        final boolean testMode;
 
-        Authorization(String tier, long expiresAt, Set<String> features) {
+        Authorization(String tier, long expiresAt, Set<String> features, boolean testMode) {
             this.tier = tier;
             this.expiresAt = expiresAt;
             this.features = features;
+            this.testMode = testMode;
         }
     }
 }

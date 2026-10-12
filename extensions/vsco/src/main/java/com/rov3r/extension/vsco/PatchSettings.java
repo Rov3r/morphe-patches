@@ -321,6 +321,57 @@ public final class PatchSettings {
         authorizationHelp.setTextSize(12f);
         content.addView(authorizationHelp);
 
+        if (OfflineAuthorization.isQaMode(activity)) {
+            addSection(content, "Offline authorization A/B test");
+
+            Button qaTier = new Button(activity);
+            qaTier.setText("Simulated tier: " + OfflineAuthorization.qaTier(activity));
+            qaTier.setOnClickListener(view -> {
+                qaTier.setText(
+                    "Simulated tier: " + OfflineAuthorization.cycleQaTier(activity)
+                );
+                Toast.makeText(
+                    activity,
+                    "Tier changed. Force-close and reopen VSCO before testing.",
+                    Toast.LENGTH_LONG
+                ).show();
+            });
+            content.addView(qaTier, matchWrap());
+
+            Button qaVariant = new Button(activity);
+            qaVariant.setText("Experiment: " + OfflineAuthorization.qaVariant(activity));
+            qaVariant.setOnClickListener(view -> {
+                qaVariant.setText(
+                    "Experiment: " + OfflineAuthorization.cycleQaVariant(activity)
+                );
+                Toast.makeText(
+                    activity,
+                    "Experiment changed. Force-close and reopen VSCO before testing.",
+                    Toast.LENGTH_LONG
+                ).show();
+            });
+            content.addView(qaVariant, matchWrap());
+
+            TextView diagnostics = label(activity, OfflineAuthorization.diagnostics());
+            diagnostics.setTextSize(13f);
+            content.addView(diagnostics);
+
+            Button resetDiagnostics = new Button(activity);
+            resetDiagnostics.setText("Reset hook counters");
+            resetDiagnostics.setOnClickListener(view -> {
+                OfflineAuthorization.resetDiagnostics();
+                diagnostics.setText(OfflineAuthorization.diagnostics());
+            });
+            content.addView(resetDiagnostics, matchWrap());
+
+            TextView qaHelp = label(
+                activity,
+                "QA controls are visible only with a signed test authorization. Use Control, Catalog, Membership, Tier, then Combined; restart VSCO and reopen this screen after each editor test to read the counters."
+            );
+            qaHelp.setTextSize(12f);
+            content.addView(qaHelp);
+        }
+
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(content);
         AlertDialog dialog = new AlertDialog.Builder(activity)

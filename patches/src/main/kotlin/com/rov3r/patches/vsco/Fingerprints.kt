@@ -50,6 +50,67 @@ internal object ToolEntitlementAccessFingerprint : Fingerprint(
     parameters = emptyList()
 )
 
+internal object AssemblageLaunchMemberFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/cam/studio/AssemblageLaunchArgs;",
+    name = "isMember",
+    returnType = "Z",
+    parameters = emptyList()
+)
+
+internal object EffectUtilsMemberOnlyToolFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/cam/effects/EffectUtils;",
+    name = "isMemberOnlyImageTool",
+    returnType = "Z",
+    parameters = listOf("Ljava/lang/String;")
+)
+
+internal object PaywallMembershipFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/cam/subscription/upsell/PaywallState;",
+    name = "isMembershipActivated",
+    returnType = "Z",
+    parameters = emptyList()
+)
+
+internal object CellPaywallMembershipFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/cam/subscription/upsell/CellPaywallState;",
+    name = "isMembershipActivated",
+    returnType = "Z",
+    parameters = emptyList()
+)
+
+private const val SUBSCRIPTION_CODE =
+    "Lco/vsco/vsn/response/models/site/SubscriptionCode;"
+private const val SUBSCRIPTION_CODE_HELPERS =
+    "Lco/vsco/vsn/response/models/site/SubscriptionCodeKt;"
+
+internal object SubscriptionCodePlusFingerprint : Fingerprint(
+    definingClass = SUBSCRIPTION_CODE_HELPERS,
+    name = "isPlus",
+    returnType = "Z",
+    parameters = listOf(SUBSCRIPTION_CODE)
+)
+
+internal object SubscriptionCodeProFingerprint : Fingerprint(
+    definingClass = SUBSCRIPTION_CODE_HELPERS,
+    name = "isPro",
+    returnType = "Z",
+    parameters = listOf(SUBSCRIPTION_CODE)
+)
+
+internal object SubscriptionCodeOneFingerprint : Fingerprint(
+    definingClass = SUBSCRIPTION_CODE_HELPERS,
+    name = "isOne",
+    returnType = "Z",
+    parameters = listOf(SUBSCRIPTION_CODE)
+)
+
+internal object DraftProLockFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/proto/studio/Draft;",
+    name = "getIsLockedForContainingProEntitlement",
+    returnType = "Z",
+    parameters = emptyList()
+)
+
 internal object ProfileHeaderImageFingerprint : Fingerprint(
     definingClass = "Lcom/vsco/cam/profile/profiles/views/ProfileHeaderDelegate;",
     name = "setHeaderProfileImage",

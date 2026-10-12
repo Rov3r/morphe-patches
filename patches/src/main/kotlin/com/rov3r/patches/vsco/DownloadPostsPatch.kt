@@ -311,6 +311,14 @@ val downloadPostsPatch = bytecodePatch(
 
         PresetEntitlementAccessFingerprint.method.wrapBooleanReturns("allowFilters")
         ToolEntitlementAccessFingerprint.method.wrapBooleanReturns("allowEditing")
+        AssemblageLaunchMemberFingerprint.method.wrapBooleanReturns("allowMembership")
+        EffectUtilsMemberOnlyToolFingerprint.method.wrapBooleanReturns("keepMemberOnly")
+        PaywallMembershipFingerprint.method.wrapBooleanReturns("allowMembership")
+        CellPaywallMembershipFingerprint.method.wrapBooleanReturns("allowMembership")
+        SubscriptionCodePlusFingerprint.method.wrapBooleanReturns("allowPlus")
+        SubscriptionCodeProFingerprint.method.wrapBooleanReturns("allowPro")
+        SubscriptionCodeOneFingerprint.method.wrapBooleanReturns("allowOne")
+        DraftProLockFingerprint.method.wrapBooleanReturns("keepProLocked")
 
         ProfileHeaderImageFingerprint.method.addInstruction(
             0,

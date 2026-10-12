@@ -58,6 +58,12 @@ edited without invalidating their signature. The APK contains only the public
 verification key. Receipt data and the private issuer key are not part of this
 repository or release artifacts.
 
+Pre-release QA builds support short-lived, issuer-signed test authorizations.
+Those tokens expose controls for simulating Plus, Pro, and VSCO One and for
+testing catalog, membership, and tier gates independently. QA tokens expire
+within seven days; these controls are temporary and will be removed before a
+stable release.
+
 ## Build
 
 1. Install Java 21 and Android SDK Platform 36.
