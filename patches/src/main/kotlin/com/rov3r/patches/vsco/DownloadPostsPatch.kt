@@ -1,8 +1,13 @@
 package com.rov3r.patches.vsco
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.resourcePatch
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
+import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 
 private const val EXTENSION_CLASS =
     "Lcom/rov3r/extension/vsco/DownloadPostsPatch;"
@@ -10,6 +15,8 @@ private const val SETTINGS_EXTENSION_CLASS =
     "Lcom/rov3r/extension/vsco/PatchSettings;"
 private const val PROFILE_EXTENSION_CLASS =
     "Lcom/rov3r/extension/vsco/ProfilePhotoPatch;"
+private const val OFFLINE_AUTHORIZATION_CLASS =
+    "Lcom/rov3r/extension/vsco/OfflineAuthorization;"
 
 private const val DOWNLOAD_VIEW =
     "com.rov3r.extension.vsco.MorpheDownloadButton"
@@ -91,6 +98,25 @@ private fun addPreferenceInitializer(xml: String, targetId: String): String {
             android:layout_height="0dp"/>
     """.trimIndent()
     return insertBeforeViewWithId(xml, targetId, marker)
+}
+
+private fun MutableMethod.wrapBooleanReturns(extensionMethod: String) {
+    val returnIndices = implementation?.instructions
+        ?.mapIndexedNotNull { index, instruction ->
+            index.takeIf { instruction.opcode == Opcode.RETURN }
+        }
+        ?.toList()
+        .orEmpty()
+    returnIndices.asReversed().forEach { index ->
+        val register = getInstruction<OneRegisterInstruction>(index).registerA
+        addInstructions(
+            index,
+            """
+                invoke-static { v$register }, $OFFLINE_AUTHORIZATION_CLASS->$extensionMethod(Z)Z
+                move-result v$register
+            """.trimIndent()
+        )
+    }
 }
 
 /** Installs the media-action icons consumed by the injected extension. */
@@ -255,7 +281,7 @@ private val downloadIconResourcePatch = resourcePatch {
 @Suppress("unused")
 val downloadPostsPatch = bytecodePatch(
     name = "Download posts",
-    description = "Adds configurable original-quality downloads, profile tools, feed cleanup, media controls, and privacy options.",
+    description = "Adds configurable downloads, profile tools, offline subscriber authorization, feed cleanup, media controls, and privacy options.",
     default = true
 ) {
     compatibleWith(VSCO_COMPATIBILITY)
@@ -282,6 +308,10 @@ val downloadPostsPatch = bytecodePatch(
             0,
             "invoke-static { p0 }, $SETTINGS_EXTENSION_CLASS->install(Landroid/app/Activity;)V"
         )
+
+        PresetEntitlementAccessFingerprint.method.wrapBooleanReturns("allowFilters")
+        ToolEntitlementAccessFingerprint.method.wrapBooleanReturns("allowEditing")
+
         ProfileHeaderImageFingerprint.method.addInstruction(
             0,
             "invoke-static { p1, p2 }, $PROFILE_EXTENSION_CLASS->bindHeader(Ljava/lang/Object;Ljava/lang/Object;)V"

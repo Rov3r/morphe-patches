@@ -35,6 +35,21 @@ internal object LithiumActivityOnCreateFingerprint : Fingerprint(
     parameters = listOf("Landroid/os/Bundle;")
 )
 
+/** Stable protobuf access getters used by VSCO's preset and tool catalog. */
+internal object PresetEntitlementAccessFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/proto/studio/PresetEntitlement;",
+    name = "getAccess",
+    returnType = "Z",
+    parameters = emptyList()
+)
+
+internal object ToolEntitlementAccessFingerprint : Fingerprint(
+    definingClass = "Lcom/vsco/proto/studio/ToolEntitlement;",
+    name = "getAccess",
+    returnType = "Z",
+    parameters = emptyList()
+)
+
 internal object ProfileHeaderImageFingerprint : Fingerprint(
     definingClass = "Lcom/vsco/cam/profile/profiles/views/ProfileHeaderDelegate;",
     name = "setHeaderProfileImage",
