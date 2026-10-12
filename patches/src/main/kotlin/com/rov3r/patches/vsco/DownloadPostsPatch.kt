@@ -61,39 +61,52 @@ private val downloadIconResourcePatch = resourcePatch {
         val globalMenu = get("res/layout/global_menu.xml", copy = false)
         var globalMenuXml = globalMenu.readText()
         if (!globalMenuXml.contains("@+id/morphe_patch_settings")) {
-            val settingsIdMarker = "android:id=\"@+id/settings\""
-            val settingsIdIndex = globalMenuXml.indexOf(settingsIdMarker)
-            val settingsStartIndex = globalMenuXml.lastIndexOf("<TextView", settingsIdIndex)
-            val patchSettingsEntry =
-                """
-                |            <TextView
-                |                android:id="@+id/morphe_patch_settings"
-                |                android:layout_width="wrap_content"
-                |                android:layout_height="wrap_content"
-                |                android:layout_marginTop="@dimen/ds_global_menu_top_margin"
-                |                android:text="Patch Settings"
-                |                android:layout_marginStart="@dimen/ds_dimen_med"
-                |                app:layout_constraintStart_toStartOf="parent"
-                |                app:layout_constraintTop_toBottomOf="@+id/global_menu_vsco_one_card"
-                |                style="@style/DsTextGlobalMenuSecondary"/>
-                """.trimMargin()
-            check(settingsIdIndex >= 0 && settingsStartIndex >= 0) {
+            val settingsId = Regex(
+                "android:id\\s*=\\s*\"@\\+?id/settings\""
+            )
+            val settingsText = Regex(
+                "android:text\\s*=\\s*\"@string/global_menu_settings\""
+            )
+            val topConstraint = Regex(
+                "app:layout_constraintTop_toBottomOf\\s*=\\s*\"[^\"]+\""
+            )
+            val settingsIdMatch = settingsId.find(globalMenuXml)
+            val settingsIdIndex = settingsIdMatch?.range?.first ?: -1
+            val settingsStartIndex = globalMenuXml.lastIndexOf('<', settingsIdIndex)
+            val settingsEndIndex = globalMenuXml.indexOf("/>", settingsIdIndex)
+            check(
+                settingsIdIndex >= 0 &&
+                    settingsStartIndex >= 0 &&
+                    settingsEndIndex >= 0
+            ) {
                 "Could not find VSCO's Settings menu entry"
             }
-            check(
-                globalMenuXml.contains(
-                    "app:layout_constraintTop_toBottomOf=\"@+id/global_menu_vsco_one_card\""
-                )
-            ) {
+            val settingsEntry = globalMenuXml.substring(
+                settingsStartIndex,
+                settingsEndIndex + 2
+            )
+            check(settingsText.containsMatchIn(settingsEntry)) {
+                "Could not find VSCO's Settings menu text"
+            }
+            check(topConstraint.containsMatchIn(settingsEntry)) {
                 "Could not find VSCO's Settings menu constraint"
             }
-            globalMenuXml = globalMenuXml.replaceFirst(
-                "app:layout_constraintTop_toBottomOf=\"@+id/global_menu_vsco_one_card\"",
-                "app:layout_constraintTop_toBottomOf=\"@+id/morphe_patch_settings\""
+
+            val patchSettingsEntry = settingsEntry
+                .replaceFirst(
+                    settingsId,
+                    "android:id=\"@+id/morphe_patch_settings\""
+                )
+                .replaceFirst(settingsText, "android:text=\"Patch Settings\"")
+                .replace(Regex("\\s+android:tag\\s*=\\s*\"[^\"]*\""), "")
+            val rewiredSettingsEntry = settingsEntry.replaceFirst(
+                topConstraint,
+                "app:layout_constraintTop_toBottomOf=\"@id/morphe_patch_settings\""
             )
             globalMenuXml = globalMenuXml.substring(0, settingsStartIndex) +
                 patchSettingsEntry + "\n" +
-                globalMenuXml.substring(settingsStartIndex)
+                rewiredSettingsEntry +
+                globalMenuXml.substring(settingsEndIndex + 2)
             globalMenu.writeText(globalMenuXml)
         }
     }
