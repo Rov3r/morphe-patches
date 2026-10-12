@@ -11,6 +11,88 @@ private const val SETTINGS_EXTENSION_CLASS =
 private const val PROFILE_EXTENSION_CLASS =
     "Lcom/rov3r/extension/vsco/ProfilePhotoPatch;"
 
+private const val DOWNLOAD_VIEW =
+    "com.rov3r.extension.vsco.MorpheDownloadButton"
+private const val INITIALIZER_VIEW =
+    "com.rov3r.extension.vsco.PatchInitializerView"
+
+private fun insertBeforeViewWithId(xml: String, id: String, view: String): String {
+    val idMatch = Regex("android:id\\s*=\\s*\"@\\+?id/$id\"").find(xml)
+        ?: error("Could not find @$id in VSCO layout")
+    val viewStart = xml.lastIndexOf('<', idMatch.range.first)
+    check(viewStart >= 0) { "Could not locate the start of @$id" }
+    return xml.substring(0, viewStart) + view + "\n    " + xml.substring(viewStart)
+}
+
+private fun insertAfterViewWithId(xml: String, id: String, view: String): String {
+    val idMatch = Regex("android:id\\s*=\\s*\"@\\+?id/$id\"").find(xml)
+        ?: error("Could not find @$id in VSCO layout")
+    val viewEnd = xml.indexOf("/>", idMatch.range.last) + 2
+    check(viewEnd > 1) { "Could not locate the end of @$id" }
+    return xml.substring(0, viewEnd) + "\n" + view + xml.substring(viewEnd)
+}
+
+private fun addFeedDownloadButton(
+    xml: String,
+    favoriteId: String,
+    buttonId: String
+): String {
+    if (xml.contains("@+id/$buttonId")) return xml
+    val spacerConstraint = Regex(
+        "(app:layout_constraint(?:Right_toLeftOf|End_toStartOf))" +
+            "\\s*=\\s*\"@\\+?id/$favoriteId\""
+    )
+    val constraintName = spacerConstraint.find(xml)?.groupValues?.get(1)
+        ?: error("Could not find the feed spacer before @$favoriteId")
+    val rewired = spacerConstraint.replaceFirst(
+        xml,
+        "$constraintName=\"@id/$buttonId\""
+    )
+    val button = """
+        <$DOWNLOAD_VIEW
+            android:id="@+id/$buttonId"
+            android:layout_width="@dimen/media_inline_icon_wrapper"
+            android:layout_height="@dimen/media_inline_icon_wrapper"
+            android:layout_marginRight="@dimen/ds_dimen_xs"
+            android:background="@android:color/transparent"
+            android:contentDescription="Download post"
+            android:padding="10dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/morphe_vsco_download"
+            app:layout_constraintBottom_toBottomOf="@id/$favoriteId"
+            $constraintName="@id/$favoriteId"
+            app:layout_constraintTop_toTopOf="@id/$favoriteId"/>
+    """.trimIndent()
+    return insertBeforeViewWithId(rewired, favoriteId, button)
+}
+
+private fun addDetailDownloadButton(xml: String): String {
+    val buttonId = "morphe_vsco_detail_download_button"
+    if (xml.contains("@+id/$buttonId")) return xml
+    val button = """
+                <$DOWNLOAD_VIEW
+                    android:id="@+id/$buttonId"
+                    android:layout_width="@dimen/header_icon_wrapper"
+                    android:layout_height="@dimen/header_icon_wrapper"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Download post"
+                    android:padding="18dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/morphe_vsco_download"/>
+    """.trimIndent()
+    return insertAfterViewWithId(xml, "detail_view_forward_button", button)
+}
+
+private fun addPreferenceInitializer(xml: String, targetId: String): String {
+    if (xml.contains("<$INITIALIZER_VIEW")) return xml
+    val marker = """
+        <$INITIALIZER_VIEW
+            android:layout_width="0dp"
+            android:layout_height="0dp"/>
+    """.trimIndent()
+    return insertBeforeViewWithId(xml, targetId, marker)
+}
+
 /** Installs the media-action icons consumed by the injected extension. */
 private val downloadIconResourcePatch = resourcePatch {
     execute {
@@ -57,6 +139,64 @@ private val downloadIconResourcePatch = resourcePatch {
             </vector>
             """.trimIndent()
         )
+
+        fun patchRequiredLayout(path: String, transform: (String) -> String) {
+            val layout = get(path, copy = false)
+            val original = layout.readText()
+            val updated = transform(original)
+            check(updated != original || original.contains(DOWNLOAD_VIEW)) {
+                "No pre-render changes were applied to $path"
+            }
+            layout.writeText(updated)
+        }
+
+        fun patchOptionalLayout(
+            path: String,
+            targetId: String
+        ) {
+            val layout = get(path, copy = false)
+            val original = layout.readText()
+            if (!original.contains("@+id/$targetId")
+                && !original.contains("@id/$targetId")) {
+                return
+            }
+            layout.writeText(addPreferenceInitializer(original, targetId))
+        }
+
+        patchRequiredLayout("res/layout/image_model_item_with_interactions.xml") {
+            addFeedDownloadButton(
+                it,
+                "image_item_favorite_button",
+                "morphe_vsco_feed_image_download_button"
+            )
+        }
+        patchRequiredLayout("res/layout/video_model_item_with_interactions.xml") {
+            addFeedDownloadButton(
+                it,
+                "video_item_favorite_button",
+                "morphe_vsco_feed_video_download_button"
+            )
+        }
+        patchRequiredLayout("res/layout/media_detail_view.xml", ::addDetailDownloadButton)
+        patchRequiredLayout("res/layout/video_detail_view.xml", ::addDetailDownloadButton)
+
+        mapOf(
+            "res/layout/user_profile_info_header_card.xml" to "user_profile_follow_button",
+            "res/layout/personal_profile_info_header_card.xml" to "member_badge",
+            "res/layout/search.xml" to "suggested_users",
+            "res/layout/suggested_users_carousel_feed_view.xml" to "suggested_users_carousel",
+            "res/layout/suggestions_from_follow.xml" to "suggestions_from_follow_list",
+            "res/layout/edit_image.xml" to "edit_upsell_banner",
+            "res/layout/edit_video.xml" to "edit_upsell_banner",
+            "res/layout/edit_upsell_banner.xml" to "upsell_banner_cta_button",
+            "res/layout/preset_promo_feed_item.xml" to "preset_promo_button",
+            "res/layout/recipes_carousel_view.xml" to "recipes",
+            "res/layout/recipes_manager_layout.xml" to "recipes_manager_upsell_layout",
+            "res/layout/studio_upsell_first_publish.xml" to "studio_upsell_background",
+            "res/layout/free_trial_ending_dialog.xml" to "btn_start_membership",
+            "res/layout/video_detail_view.xml" to "video_view",
+            "res/layout/global_menu.xml" to "member_hub"
+        ).forEach { (path, targetId) -> patchOptionalLayout(path, targetId) }
 
         val globalMenu = get("res/layout/global_menu.xml", copy = false)
         var globalMenuXml = globalMenu.readText()

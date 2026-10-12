@@ -3,6 +3,7 @@ package com.rov3r.extension.vsco;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
 import android.preference.PreferenceManager;
@@ -57,8 +58,7 @@ public final class PatchSettings {
     static final String DEFAULT_FILE_NAME_TEMPLATE = "vsco_{id}";
 
     private static final String MENU_TAG = "rov3r_morphe_patch_settings";
-    private static final long SCAN_INTERVAL_MS = 1000L;
-
+    private static final long FALLBACK_SCAN_INTERVAL_MS = 1000L;
     private static final Set<String> SUGGESTED_USER_IDS = setOf(
         "suggested_users",
         "suggested_users_bookstack_view",
@@ -120,7 +120,7 @@ public final class PatchSettings {
         if (activity == null) {
             return;
         }
-        activity.getWindow().getDecorView().post(() -> installAfterContentView(activity));
+        installBeforeContentView(activity);
     }
 
     static SharedPreferences preferences(Context context) {
@@ -135,7 +135,7 @@ public final class PatchSettings {
         return preferences(context).getString(key, defaultValue);
     }
 
-    private static void installAfterContentView(Activity activity) {
+    private static void installBeforeContentView(Activity activity) {
         View decor = activity.getWindow().getDecorView();
         attachMenuEntry(activity, decor);
         applyPreferences(activity, decor);
@@ -148,16 +148,15 @@ public final class PatchSettings {
         if (existing != null && existing.get() != null) {
             return;
         }
-        final long[] lastScan = {0L};
+        final long[] lastFallbackScan = {0L};
         final long[] lastAnalyticsScan = {0L};
         ViewTreeObserver.OnGlobalLayoutListener listener = () -> {
             long now = android.os.SystemClock.uptimeMillis();
-            if (now - lastScan[0] < SCAN_INTERVAL_MS) {
-                return;
+            if (now - lastFallbackScan[0] >= FALLBACK_SCAN_INTERVAL_MS) {
+                lastFallbackScan[0] = now;
+                attachMenuEntry(activity, decor);
+                applyPreferences(activity, decor);
             }
-            lastScan[0] = now;
-            attachMenuEntry(activity, decor);
-            applyPreferences(activity, decor);
             if (now - lastAnalyticsScan[0] >= 5000L
                 && (enabled(activity, BLOCK_USAGE_ANALYTICS, false)
                     || enabled(activity, BLOCK_MARKETING_ATTRIBUTION, false))) {
@@ -358,42 +357,66 @@ public final class PatchSettings {
 
     private static void applyPreferences(Activity activity, View root) {
         DownloadPostsPatch.attachFeedButtons(root);
+        applyBeforeDraw(activity, root);
+    }
+
+    /** Applies layout-local preferences synchronously during view attachment. */
+    static void applyBeforeDraw(Context context, View root) {
+        Activity activity = findActivity(context);
+        if (activity != null) {
+            attachMenuEntry(activity, root);
+        }
         applyVisibility(
             root,
             FAVORITE_ACTION_IDS,
-            enabled(activity, HIDE_ACTION_FAVORITE, false)
+            enabled(context, HIDE_ACTION_FAVORITE, false)
         );
         applyVisibility(
             root,
             REPOST_ACTION_IDS,
-            enabled(activity, HIDE_ACTION_REPOST, false)
+            enabled(context, HIDE_ACTION_REPOST, false)
         );
         applyVisibility(
             root,
             MESSAGE_ACTION_IDS,
-            enabled(activity, HIDE_ACTION_MESSAGE, false)
+            enabled(context, HIDE_ACTION_MESSAGE, false)
         );
-        applyVisibility(root, "user_profile_follow_button", enabled(activity, HIDE_PROFILE_FOLLOW, false));
-        boolean hideMessage = enabled(activity, HIDE_PROFILE_MESSAGE, false);
+        applyVisibility(root, "user_profile_follow_button", enabled(context, HIDE_PROFILE_FOLLOW, false));
+        boolean hideMessage = enabled(context, HIDE_PROFILE_MESSAGE, false);
         applyVisibility(root, "user_profile_message_button", hideMessage);
         applyVisibility(root, "message_bullet_divider", hideMessage);
-        applyVisibility(root, "membership_badge", enabled(activity, HIDE_MEMBER_BADGE, false));
-        applyVisibility(root, "member_badge", enabled(activity, HIDE_MEMBER_BADGE, false));
-        applyVisibility(root, SUGGESTED_USER_IDS, enabled(activity, HIDE_SUGGESTED_USERS, false));
+        applyVisibility(root, "membership_badge", enabled(context, HIDE_MEMBER_BADGE, false));
+        applyVisibility(root, "member_badge", enabled(context, HIDE_MEMBER_BADGE, false));
+        applyVisibility(root, SUGGESTED_USER_IDS, enabled(context, HIDE_SUGGESTED_USERS, false));
         applyVisibility(
             root,
             MEMBERSHIP_PROMOTION_IDS,
-            enabled(activity, HIDE_MEMBERSHIP_PROMOTIONS, false)
+            enabled(context, HIDE_MEMBERSHIP_PROMOTIONS, false)
         );
         applyVisibility(
             root,
             PROMOTIONAL_CARD_IDS,
-            enabled(activity, HIDE_PROMOTIONAL_CARDS, false)
+            enabled(context, HIDE_PROMOTIONAL_CARDS, false)
         );
         DownloadPostsPatch.applyButtonPreferences(root);
-        if (enabled(activity, ALWAYS_UNMUTE_VIDEO, false)) {
+        if (enabled(context, ALWAYS_UNMUTE_VIDEO, false)) {
             forceUnmuted(root);
         }
+    }
+
+    private static Activity findActivity(Context context) {
+        Context current = context;
+        while (current instanceof ContextWrapper) {
+            if (current instanceof Activity) {
+                return (Activity) current;
+            }
+            Context base = ((ContextWrapper) current).getBaseContext();
+            if (base == current) {
+                break;
+            }
+            current = base;
+        }
+        return current instanceof Activity ? (Activity) current : null;
     }
 
     private static void applyVisibility(View root, String name, boolean hidden) {

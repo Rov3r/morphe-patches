@@ -84,52 +84,87 @@ public final class DownloadPostsPatch {
         }
 
         ViewGroup actionRow = (ViewGroup) favoriteButton.getParent();
-        if (actionRow.findViewWithTag(DOWNLOAD_BUTTON_TAG) != null) {
-            return;
-        }
-
         int iconId = resourceId(context, "drawable", "morphe_vsco_download");
         if (iconId == 0) {
             return;
         }
 
-        ImageButton button = createActionButton(
-            context,
-            favoriteButton,
-            resourceId(context, "drawable", "morphe_vsco_download")
-        );
-        button.setTag(DOWNLOAD_BUTTON_TAG);
-        button.setContentDescription("Download post. Long press to change save folder.");
+        View existingDownload = actionRow.findViewWithTag(DOWNLOAD_BUTTON_TAG);
+        if (existingDownload == null) {
+            int inflatedId = resourceId(context, "id", "morphe_vsco_detail_download_button");
+            if (inflatedId != 0) {
+                existingDownload = detailView.findViewById(inflatedId);
+            }
+        }
 
-        configureDownloadButton(button, null);
+        ImageButton button;
+        if (existingDownload instanceof ImageButton) {
+            button = (ImageButton) existingDownload;
+            bindInflatedDownloadButton(button);
+        } else {
+            button = createActionButton(context, favoriteButton, iconId);
+            button.setTag(DOWNLOAD_BUTTON_TAG);
+            button.setContentDescription("Download post. Long press to change save folder.");
+            configureDownloadButton(button, null);
+            int forwardId = resourceId(context, "id", "detail_view_forward_button");
+            View forwardButton = detailView.findViewById(forwardId);
+            int insertAt = forwardButton == null
+                ? actionRow.indexOfChild(favoriteButton) + 1
+                : actionRow.indexOfChild(forwardButton) + 1;
+            actionRow.addView(button, insertAt);
+        }
 
-        ImageButton copyButton = createActionButton(
-            context,
-            favoriteButton,
-            resourceId(context, "drawable", "morphe_vsco_copy")
-        );
-        copyButton.setTag(COPY_BUTTON_TAG);
-        copyButton.setContentDescription("Copy original media link");
-        copyButton.setOnClickListener(view -> copyOriginalLink(view.getContext()));
-
-        ImageButton shareButton = createActionButton(
-            context,
-            favoriteButton,
-            resourceId(context, "drawable", "morphe_vsco_share")
-        );
-        shareButton.setTag(SHARE_BUTTON_TAG);
-        shareButton.setContentDescription("Share original media");
-        shareButton.setOnClickListener(view -> shareOriginal(view.getContext()));
-
-        int forwardId = resourceId(context, "id", "detail_view_forward_button");
-        View forwardButton = detailView.findViewById(forwardId);
-        int insertAt = forwardButton == null
-            ? actionRow.indexOfChild(favoriteButton) + 1
-            : actionRow.indexOfChild(forwardButton) + 1;
-        actionRow.addView(button, insertAt++);
-        actionRow.addView(copyButton, insertAt++);
-        actionRow.addView(shareButton, insertAt);
+        int insertAt = actionRow.indexOfChild(button) + 1;
+        if (actionRow.findViewWithTag(COPY_BUTTON_TAG) == null) {
+            ImageButton copyButton = createActionButton(
+                context,
+                favoriteButton,
+                resourceId(context, "drawable", "morphe_vsco_copy")
+            );
+            copyButton.setTag(COPY_BUTTON_TAG);
+            copyButton.setContentDescription("Copy original media link");
+            copyButton.setOnClickListener(view -> copyOriginalLink(view.getContext()));
+            actionRow.addView(copyButton, insertAt++);
+        }
+        if (actionRow.findViewWithTag(SHARE_BUTTON_TAG) == null) {
+            ImageButton shareButton = createActionButton(
+                context,
+                favoriteButton,
+                resourceId(context, "drawable", "morphe_vsco_share")
+            );
+            shareButton.setTag(SHARE_BUTTON_TAG);
+            shareButton.setContentDescription("Share original media");
+            shareButton.setOnClickListener(view -> shareOriginal(view.getContext()));
+            actionRow.addView(shareButton, insertAt);
+        }
         applyButtonPreferences(actionRow);
+    }
+
+    /** Initializes a download button that was created during XML inflation. */
+    static void bindInflatedDownloadButton(ImageButton button) {
+        boolean feed = false;
+        String resourceName = "";
+        try {
+            resourceName = button.getResources().getResourceEntryName(button.getId());
+            feed = resourceName.startsWith("morphe_vsco_feed_");
+        } catch (RuntimeException ignored) {
+            // Detail buttons use the non-feed behavior when an ID is unavailable.
+        }
+        button.setTag(feed ? FEED_DOWNLOAD_BUTTON_TAG : DOWNLOAD_BUTTON_TAG);
+        button.setContentDescription("Download post. Long press to change save folder.");
+        View feedItem = feed ? button : null;
+        if (feed && button.getParent() instanceof ViewGroup) {
+            String favoriteName = resourceName.contains("video")
+                ? "video_item_favorite_button"
+                : "image_item_favorite_button";
+            int favoriteId = resourceId(button.getContext(), "id", favoriteName);
+            View favorite = ((ViewGroup) button.getParent()).findViewById(favoriteId);
+            if (favorite != null) {
+                feedItem = favorite;
+            }
+        }
+        configureDownloadButton(button, feedItem);
+        applyButtonPreferences(button);
     }
 
     private static ImageButton createActionButton(Context context, View template, int iconId) {
@@ -241,7 +276,8 @@ public final class DownloadPostsPatch {
             return;
         }
         ViewGroup card = (ViewGroup) favoriteButton.getParent();
-        if (card.findViewWithTag(FEED_DOWNLOAD_BUTTON_TAG) != null) {
+        if (card.findViewWithTag(FEED_DOWNLOAD_BUTTON_TAG) != null
+            || hasInflatedFeedButton(card)) {
             return;
         }
         int iconId = resourceId(card.getContext(), "drawable", "morphe_vsco_download");
@@ -263,6 +299,20 @@ public final class DownloadPostsPatch {
 
         card.addView(button);
         applyButtonPreferences(button);
+    }
+
+    private static boolean hasInflatedFeedButton(View card) {
+        Context context = card.getContext();
+        for (String name : new String[] {
+            "morphe_vsco_feed_image_download_button",
+            "morphe_vsco_feed_video_download_button"
+        }) {
+            int id = resourceId(context, "id", name);
+            if (id != 0 && card.findViewById(id) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ViewGroup.LayoutParams createFeedLayoutParams(View favoriteButton) {
