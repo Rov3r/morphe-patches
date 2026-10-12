@@ -1,3 +1,9 @@
+## [0.0.9](https://github.com/Rov3r/morphe-patches/compare/v0.0.8...v0.0.9) (2026-10-12)
+
+### 🐛 Bug Fixes
+
+* **vsco:** add offline entitlement QA harness ([784044b](https://github.com/Rov3r/morphe-patches/commit/784044bd2c231cebedffc334fc266e3995418567))
+
 ## [0.0.8](https://github.com/Rov3r/morphe-patches/compare/v0.0.7...v0.0.8) (2026-10-12)
 
 ### 🐛 Bug Fixes

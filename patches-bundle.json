@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-12T04:27:12",
-  "description": "## [0.0.8](https://github.com/Rov3r/morphe-patches/compare/v0.0.7...v0.0.8) (2026-10-12)\n\n### 🐛 Bug Fixes\n\n* **vsco:** add signed offline subscriber access ([8f9088e](https://github.com/Rov3r/morphe-patches/commit/8f9088e2c4124d0414123f5aa89d0fd0c1a3157e))",
-  "download_url": "https://github.com/Rov3r/morphe-patches/releases/download/v0.0.8/patches-0.0.8.mpp",
+  "created_at": "2026-10-12T04:59:22",
+  "description": "## [0.0.9](https://github.com/Rov3r/morphe-patches/compare/v0.0.8...v0.0.9) (2026-10-12)\n\n### 🐛 Bug Fixes\n\n* **vsco:** add offline entitlement QA harness ([784044b](https://github.com/Rov3r/morphe-patches/commit/784044bd2c231cebedffc334fc266e3995418567))",
+  "download_url": "https://github.com/Rov3r/morphe-patches/releases/download/v0.0.9/patches-0.0.9.mpp",
   "signature_download_url": "",
-  "version": "0.0.8"
+  "version": "0.0.9"
 }
