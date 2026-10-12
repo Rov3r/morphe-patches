@@ -226,7 +226,7 @@ public final class DownloadPostsPatch {
         int id = root.getId();
         if ((id == imageFavorite && imageFavorite != 0)
             || (id == videoFavorite && videoFavorite != 0)) {
-            attachFeedButton(root, id == imageFavorite ? "image_item" : "video_item");
+            attachFeedButton(root);
         }
         if (root instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) root;
@@ -236,7 +236,7 @@ public final class DownloadPostsPatch {
         }
     }
 
-    private static void attachFeedButton(View favoriteButton, String prefix) {
+    private static void attachFeedButton(View favoriteButton) {
         if (!(favoriteButton.getParent() instanceof ViewGroup)) {
             return;
         }
@@ -255,30 +255,81 @@ public final class DownloadPostsPatch {
         button.setContentDescription("Download post. Long press to change save folder.");
         configureDownloadButton(button, favoriteButton);
 
-        ViewGroup.LayoutParams params = button.getLayoutParams();
-        clearHorizontalConstraints(params);
-        setIntField(params, "rightToLeft", favoriteButton.getId());
-        setIntField(params, "endToStart", favoriteButton.getId());
+        ViewGroup.LayoutParams params = createFeedLayoutParams(favoriteButton);
+        if (params == null) {
+            return;
+        }
         button.setLayoutParams(params);
 
-        int spacerId = resourceId(card.getContext(), "id", prefix + "_username_interactions_spacer");
-        View spacer = card.findViewById(spacerId);
-        if (spacer != null) {
-            ViewGroup.LayoutParams spacerParams = spacer.getLayoutParams();
-            setIntField(spacerParams, "rightToLeft", button.getId());
-            setIntField(spacerParams, "endToStart", button.getId());
-            spacer.setLayoutParams(spacerParams);
-        }
         card.addView(button);
         applyButtonPreferences(button);
     }
 
-    private static void clearHorizontalConstraints(Object params) {
-        for (String name : new String[] {
-            "leftToLeft", "leftToRight", "rightToLeft", "rightToRight",
-            "startToStart", "startToEnd", "endToStart", "endToEnd"
-        }) {
-            setIntField(params, name, -1);
+    private static ViewGroup.LayoutParams createFeedLayoutParams(View favoriteButton) {
+        ViewGroup.LayoutParams original = favoriteButton.getLayoutParams();
+        if (original instanceof RelativeLayout.LayoutParams) {
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
+                original.width,
+                original.height
+            );
+            copyMargins(original, params);
+            params.addRule(RelativeLayout.LEFT_OF, favoriteButton.getId());
+            params.addRule(RelativeLayout.ALIGN_TOP, favoriteButton.getId());
+            params.addRule(RelativeLayout.ALIGN_BOTTOM, favoriteButton.getId());
+            return params;
+        }
+
+        try {
+            Object copy = original.getClass()
+                .getConstructor(int.class, int.class)
+                .newInstance(original.width, original.height);
+            if (!(copy instanceof ViewGroup.LayoutParams)) {
+                return null;
+            }
+            ViewGroup.LayoutParams params = (ViewGroup.LayoutParams) copy;
+            copyMargins(original, params);
+            for (String name : new String[] {
+                "topToTop", "topToBottom", "bottomToTop", "bottomToBottom",
+                "baselineToBaseline", "baselineToTop", "baselineToBottom"
+            }) {
+                copyIntField(original, params, name);
+            }
+            boolean anchored = setIntField(
+                params, "rightToLeft", favoriteButton.getId()
+            );
+            anchored |= setIntField(
+                params, "endToStart", favoriteButton.getId()
+            );
+            if (!anchored) {
+                return null;
+            }
+            return params;
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static void copyMargins(
+        ViewGroup.LayoutParams source,
+        ViewGroup.LayoutParams target
+    ) {
+        if (source instanceof ViewGroup.MarginLayoutParams
+            && target instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams from = (ViewGroup.MarginLayoutParams) source;
+            ViewGroup.MarginLayoutParams to = (ViewGroup.MarginLayoutParams) target;
+            to.setMargins(from.leftMargin, from.topMargin, from.rightMargin, from.bottomMargin);
+            to.setMarginStart(from.getMarginStart());
+            to.setMarginEnd(from.getMarginEnd());
+        }
+    }
+
+    private static void copyIntField(Object source, Object target, String name) {
+        try {
+            Field sourceField = source.getClass().getField(name);
+            Field targetField = target.getClass().getField(name);
+            targetField.setInt(target, sourceField.getInt(source));
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // The layout implementation may not support every vertical constraint.
         }
     }
 
@@ -908,11 +959,13 @@ public final class DownloadPostsPatch {
         return new ViewGroup.LayoutParams(original);
     }
 
-    private static void setIntField(Object target, String name, int value) {
+    private static boolean setIntField(Object target, String name, int value) {
         try {
             target.getClass().getField(name).setInt(target, value);
+            return true;
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             // These fields are supplied by ConstraintLayout on supported VSCO versions.
+            return false;
         }
     }
 

@@ -324,7 +324,7 @@ public final class PatchSettings {
         Switch toggle = new Switch(parent.getContext());
         toggle.setText(title);
         toggle.setChecked(prefs.getBoolean(key, defaultValue));
-        toggle.setPadding(0, dp(parent.getContext(), 4), 0, dp(parent.getContext(), 4));
+        toggle.setPadding(0, dp(parent.getContext(), 8), 0, dp(parent.getContext(), 8));
         toggle.setOnCheckedChangeListener((button, checked) -> {
             prefs.edit().putBoolean(key, checked).apply();
             if (listener != null) {
@@ -338,13 +338,14 @@ public final class PatchSettings {
         TextView heading = label(parent.getContext(), title);
         heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         heading.setTextSize(17f);
-        heading.setPadding(0, dp(parent.getContext(), 18), 0, dp(parent.getContext(), 4));
+        heading.setPadding(0, dp(parent.getContext(), 20), 0, dp(parent.getContext(), 8));
         parent.addView(heading, matchWrap());
     }
 
     private static TextView label(Context context, String value) {
         TextView view = new TextView(context);
         view.setText(value);
+        view.setPadding(0, dp(context, 4), 0, dp(context, 4));
         return view;
     }
 
