@@ -1,3 +1,9 @@
+## [0.0.5](https://github.com/Rov3r/morphe-patches/compare/v0.0.4...v0.0.5) (2026-10-12)
+
+### 🐛 Bug Fixes
+
+* **vsco:** support decoded settings resource ids ([5f1dc74](https://github.com/Rov3r/morphe-patches/commit/5f1dc740eea51d464f37f5b74988100fb051979f))
+
 ## [0.0.4](https://github.com/Rov3r/morphe-patches/compare/v0.0.3...v0.0.4) (2026-10-11)
 
 ### 🐛 Bug Fixes

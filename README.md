@@ -10,7 +10,7 @@ bundle.
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v0.0.4](https://github.com/Rov3r/morphe-patches/releases/tag/v0.0.4)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
+> **[v0.0.5](https://github.com/Rov3r/morphe-patches/releases/tag/v0.0.5)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
 <details open>
 <summary>📦 VSCO&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
 <br>
