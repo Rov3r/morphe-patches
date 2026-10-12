@@ -10,7 +10,7 @@ bundle.
 ## Patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v0.0.7](https://github.com/Rov3r/morphe-patches/releases/tag/v0.0.7)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
+> **[v0.0.8](https://github.com/Rov3r/morphe-patches/releases/tag/v0.0.8)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
 <details open>
 <summary>📦 VSCO&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
 <br>
@@ -22,7 +22,7 @@ bundle.
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Download posts](#download-posts) | Adds configurable original-quality downloads, profile tools, feed cleanup, media controls, and privacy options. |  |
+| [Download posts](#download-posts) | Adds configurable downloads, profile tools, offline subscriber authorization, feed cleanup, media controls, and privacy options. |  |
 
 </details>
 

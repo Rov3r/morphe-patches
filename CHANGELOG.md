@@ -1,3 +1,9 @@
+## [0.0.8](https://github.com/Rov3r/morphe-patches/compare/v0.0.7...v0.0.8) (2026-10-12)
+
+### 🐛 Bug Fixes
+
+* **vsco:** add signed offline subscriber access ([8f9088e](https://github.com/Rov3r/morphe-patches/commit/8f9088e2c4124d0414123f5aa89d0fd0c1a3157e))
+
 ## [0.0.7](https://github.com/Rov3r/morphe-patches/compare/v0.0.6...v0.0.7) (2026-10-12)
 
 ### 🐛 Bug Fixes
