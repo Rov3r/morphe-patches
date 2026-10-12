@@ -1,3 +1,9 @@
+## [0.0.7](https://github.com/Rov3r/morphe-patches/compare/v0.0.6...v0.0.7) (2026-10-12)
+
+### 🐛 Bug Fixes
+
+* **vsco:** apply UI patches before first render ([bac5d0f](https://github.com/Rov3r/morphe-patches/commit/bac5d0f019438f444074d303239a21d625d75c26))
+
 ## [0.0.6](https://github.com/Rov3r/morphe-patches/compare/v0.0.5...v0.0.6) (2026-10-12)
 
 ### 🐛 Bug Fixes
