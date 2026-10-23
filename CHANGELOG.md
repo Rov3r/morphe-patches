@@ -1,3 +1,9 @@
+## [0.0.10](https://github.com/Rov3r/morphe-patches/compare/v0.0.9...v0.0.10) (2026-10-23)
+
+### 🐛 Bug Fixes
+
+* **vsco:** remove offline authorization workflow ([ce38f7a](https://github.com/Rov3r/morphe-patches/commit/ce38f7aac86be211dea799ea64ae3d03fe86a3f4))
+
 ## [0.0.7](https://github.com/Rov3r/morphe-patches/compare/v0.0.6...v0.0.7) (2026-10-12)
 
 ### 🐛 Bug Fixes
